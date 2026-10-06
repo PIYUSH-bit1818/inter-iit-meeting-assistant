@@ -8,8 +8,9 @@ action items) through a three-stage pipeline:
 2. **Transcript refinement** — Anthropic LLM (model A)
 3. **Meeting documentation** — a separate Anthropic LLM (model B)
 
-> Status: **Phase 1 — scaffolding.** The API and UI start, data contracts are
-> defined and tested; the pipeline stages are not implemented yet.
+> Status: **Phase 2 — audio validation and normalisation done.** Uploads are
+> checked (type, size, readability, duration, silence) and converted to 16 kHz
+> mono WAV. Speech-to-text and the LLM stages are not implemented yet.
 
 See [TECHNICAL.md](TECHNICAL.md) for the models and data flow.
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
+from pathlib import Path
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -19,6 +20,25 @@ UNSPECIFIED = "Unspecified"
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+# ---------------------------------------------------------------------------
+# Stage 0: audio validation / normalisation
+# ---------------------------------------------------------------------------
+
+
+class PreparedAudio(BaseModel):
+    """A validated upload converted to the format the STT stage expects."""
+
+    source_path: Path
+    normalized_path: Path
+    duration_seconds: float = Field(gt=0)
+    sample_rate: int = Field(gt=0)
+    channels: int = Field(gt=0)
+    source_format: str = Field(description="Container reported by ffprobe, e.g. 'mp3'")
+    source_codec: str | None = None
+    source_sample_rate: int | None = None
+    source_channels: int | None = None
 
 
 # ---------------------------------------------------------------------------
