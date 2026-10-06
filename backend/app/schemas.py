@@ -71,6 +71,8 @@ class RawTranscript(BaseModel):
     language: str | None = None
     duration_seconds: float | None = Field(default=None, ge=0)
     stt_model: str
+    stt_provider: str | None = None
+    chunk_count: int = Field(default=1, ge=1, description="STT requests used")
 
     _unique = field_validator("segments")(_check_unique_ids)
 

@@ -20,8 +20,15 @@ class Settings(BaseSettings):
     groq_api_key: SecretStr | None = None
     anthropic_api_key: SecretStr | None = None
 
-    # Model IDs - no defaults on purpose; they must be set explicitly
-    stt_model: str | None = None
+    # Speech-to-text (Groq). whisper-large-v3 is Groq's most accurate
+    # Whisper model per its docs; override if Groq's model list changes.
+    stt_model: str = "whisper-large-v3"
+    stt_language: str = "en"
+    # Groq upload limit per request: 25 MB on the free tier, 100 MB on dev tier
+    groq_max_request_mb: float = Field(default=25, gt=0)
+    stt_request_timeout_seconds: float = Field(default=300, gt=0)
+
+    # LLM model IDs - no defaults on purpose; verified before Phase 4
     refine_model: str | None = None
     document_model: str | None = None
 

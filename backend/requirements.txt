@@ -5,6 +5,9 @@ pydantic>=2.13,<3
 pydantic-settings>=2.15,<3
 python-multipart>=0.0.32
 
+# Speech-to-text
+groq>=1.7,<2
+
 # Testing
 pytest>=9.1
 httpx2>=2.13
