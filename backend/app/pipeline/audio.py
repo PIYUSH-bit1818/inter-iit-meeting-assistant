@@ -72,17 +72,41 @@ def prepare_audio(
 ) -> PreparedAudio:
     """Validate ``path`` and write ``out_dir/normalized.wav``.
 
-    On any failure no normalized file is left behind in ``out_dir``.
+    Equivalent to ``validate_audio`` followed by ``normalize_audio``. On any
+    failure no normalized file is left behind in ``out_dir``.
     """
-    src = Path(path)
-    out_dir = Path(out_dir)
+    probe = validate_audio(path, max_bytes=max_bytes, min_duration=min_duration)
+    return normalize_audio(path, out_dir, probe, min_duration=min_duration,
+                           silence_threshold_db=silence_threshold_db)
 
+
+def validate_audio(
+    path: Path | str,
+    *,
+    max_bytes: int | None = None,
+    min_duration: float = MIN_DURATION_SECONDS,
+) -> dict:
+    """File checks plus ffprobe. Returns the probe info for ``normalize_audio``."""
+    src = Path(path)
     check_file(src, max_bytes=max_bytes)
     probe = probe_audio(src)
-
     if probe["duration"] is not None and probe["duration"] < min_duration:
         raise _too_short(probe["duration"], min_duration)
+    return probe
 
+
+def normalize_audio(
+    path: Path | str,
+    out_dir: Path | str,
+    probe: dict,
+    *,
+    min_duration: float = MIN_DURATION_SECONDS,
+    silence_threshold_db: float = SILENCE_THRESHOLD_DB,
+) -> PreparedAudio:
+    """Convert a validated file to 16 kHz mono WAV and reject unusable audio
+    (too short after decoding, or silent)."""
+    src = Path(path)
+    out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / NORMALIZED_FILENAME
     if out.resolve() == src.resolve():

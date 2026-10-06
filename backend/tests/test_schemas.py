@@ -101,8 +101,8 @@ class TestActionItem:
     def test_missing_owner_and_deadline_become_none(self, value):
         item = ActionItem(task="Send report", owner=value, deadline=value, **EV)
         assert item.owner is None and item.deadline is None
-        assert item.owner_display == "Unspecified"
-        assert item.deadline_display == "Unspecified"
+        assert item.owner_display == "Not specified"
+        assert item.deadline_display == "Not specified"
 
     def test_stated_values_kept(self):
         item = ActionItem(task="Send report", owner=" Priya ", deadline="Friday", **EV)

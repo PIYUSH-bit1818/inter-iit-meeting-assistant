@@ -142,6 +142,9 @@ def test_timestamps_clamped_to_recording_length(tmp_path):
         {"text": "", "segments": []},
         {"text": ""},
         {"text": "   ", "segments": [seg(0, 1, "   ")]},
+        # Real Groq output for a 6 s pure tone: punctuation only, no_speech_prob 0.99
+        {"text": " .", "segments": [seg(0, 6, " .")]},
+        {"text": "... ?", "segments": [seg(0, 2, "..."), seg(2, 3, " ?")]},
     ],
 )
 def test_empty_transcript_raises_no_speech(tmp_path, response):
@@ -351,3 +354,9 @@ def test_groq_rejects_oversized_chunk_before_sending():
         provider.transcribe_wav(b"\0" * 1_000_001, "big.wav")
     assert exc.value.code == "request_too_large"
     assert client.kwargs is None, "must not call the API"
+
+
+def test_short_real_speech_is_kept(tmp_path):
+    provider = FakeProvider([{"segments": [seg(0, 1, " ."), seg(1, 2, " OK.")]}])
+    result = transcribe(prepared(tmp_path, 3), provider=provider, settings=settings())
+    assert [s.text for s in result.segments] == [".", "OK."], "raw text still kept verbatim"

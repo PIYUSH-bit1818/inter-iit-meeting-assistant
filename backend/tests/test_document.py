@@ -187,7 +187,7 @@ def test_realistic_meeting_record():
     priya, report = record.action_items
     assert (priya.owner, priya.deadline) == ("Priya", "Friday")                       # 5, 7
     assert (report.owner, report.deadline) == (None, None)                            # 6, 8, 9
-    assert report.owner_display == report.deadline_display == "Unspecified"
+    assert report.owner_display == report.deadline_display == "Not specified"
     assert priya.evidence_segment_ids == [3]                                          # 11
     assert record.document_model == "fake-doc-model" and record.prompt_version == PROMPT_VERSION
 

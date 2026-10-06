@@ -1,5 +1,34 @@
 # Technical Description
 
+The Meeting Assistant turns a recorded English meeting into a raw transcript,
+a separately refined transcript and an evidence-backed meeting record through
+one speech-to-text model and **two distinct LLM stages**, coordinated by a
+FastAPI backend and presented in a Streamlit UI.
+
+## Architecture
+
+```
+┌──────────────┐  POST /jobs (file)        ┌──────────────────────────────────────────────┐
+│  Streamlit   │ ────────────────────────▶ │ FastAPI  backend/app/main.py                 │
+│  frontend/   │  GET /jobs/{id} (poll)    │   JobStore (in memory, last 50 jobs)         │
+│  app.py      │ ◀──────────────────────── │   runner.run_job() in a background thread    │
+│              │  GET /jobs/{id}/exports/* │                                              │
+└──────────────┘ ◀──────────────────────── │  1 validate   audio.validate_audio  (ffprobe)│
+                                           │  2 normalize  audio.normalize_audio (ffmpeg) │
+                                           │  3 transcribe stt.transcribe    → Groq       │
+                                           │  4 refine     refine.refine     → Gemini #1  │
+                                           │  5 document   document.document → Gemini #2  │
+                                           │  6 export     export.build_exports           │
+                                           └──────────────────────────────────────────────┘
+```
+
+| Concept | In this system |
+|---|---|
+| **Raw transcript ≠ refined transcript** | `RawTranscript` is Whisper's output, never modified. `RefinedTranscript` is a separate object with the same segment ids/timestamps and LLM #1's cleaned text; every segment keeps its raw text, edits and any rejected edit. |
+| **Proposal ≠ decision** | A decision requires explicit agreement in a cited, non-question, non-negated statement. Suggestions ("maybe we could…") go to `proposals`; a decision without agreement evidence is withheld. |
+| **Discussion ≠ action item** | An action item requires an explicit assignment or commitment ("X will…", "can you…", "I'll…"). "We need to…" / "someone should…" never become tasks. |
+| **Owner/deadline are null unless supported** | `owner` must be a person named in the cited evidence (never "I", "we", "someone"); `deadline` must be the meeting's own wording found in the evidence. Otherwise `null` (shown as "Not specified"). |
+
 ## Models and roles
 
 | Stage | Model | Role |
@@ -11,7 +40,7 @@
 ## Data flow
 
 ```
-upload → validate + normalise (ffmpeg) → PreparedAudio (16 kHz mono WAV)
+upload → validate (ffprobe) → normalise (ffmpeg) → PreparedAudio (16 kHz mono WAV)
        → Groq Whisper (chunked if needed) → RawTranscript
        → Gemini refinement (strict JSON) → guards → RefinedTranscript
        → Gemini documentation (strict JSON, different model) → grounding checks → MeetingRecord
@@ -22,11 +51,23 @@ Contracts are defined in [backend/app/schemas.py](backend/app/schemas.py).
 Segment ids stay stable across stages, so each decision and action item cites
 the transcript segments it was drawn from.
 
-## Stage 0 — audio validation ([audio.py](backend/app/pipeline/audio.py))
+## Stage 0 — audio validation and normalisation ([audio.py](backend/app/pipeline/audio.py))
 
-Rejects missing, empty, unsupported, unreadable, video-only, too-short (< 1 s)
-and silent files with user-facing messages, then converts the first audio
-stream to 16 kHz mono 16-bit PCM WAV — the format Whisper uses internally.
+Two separately reported stages; all ffmpeg/ffprobe use is confined to this module.
+
+- **Validation** (`validate_audio`): file exists, is a regular file, has a
+  supported extension (WAV, MP3, M4A, OGG, FLAC, WEBM, MP4), is not empty, is
+  under the size limit, is readable by ffprobe, has an audio stream, and is at
+  least 1 s long.
+- **Normalisation** (`normalize_audio`): converts the first audio stream to
+  16 kHz mono 16-bit PCM WAV (Whisper's native input) in one ffmpeg pass that
+  also measures the peak level; recordings peaking below −50 dB are rejected
+  as silent. Output is written atomically and removed on any failure.
+
+Errors are `AudioValidationError(message, code)` (`not_found`, `empty`,
+`unsupported_format`, `unreadable`, `no_audio_stream`, `decode_failed`,
+`too_short`, `silent`, `too_large`) or `AudioToolError` for server problems
+(ffmpeg missing or timing out).
 
 ## Stage 1 — speech-to-text ([stt.py](backend/app/pipeline/stt.py))
 
@@ -75,7 +116,7 @@ Nothing is truncated: every part of the recording belongs to exactly one window.
 | `provider_rejected` | other 4xx |
 | `timeout`, `network_error` | request timed out / could not connect |
 | `invalid_response`, `unsupported_response` | missing/invalid segments or timestamps, non-JSON reply, text without timestamps |
-| `no_speech` | transcript is empty across the whole recording |
+| `no_speech` | no segment contains a single letter or digit (Whisper returns e.g. just "." for tones or music) |
 
 The Groq SDK retries transient failures (connection errors, 429, 5xx) up to
 three times before an error is raised.
@@ -235,21 +276,105 @@ named in a multi-sentence quote is the one doing *this* task. A statement like
 "We will not change the schema" (a plan with no explicit agreement) is
 rejected as a decision by design.
 
-## Orchestration and exports
+## Prompt strategy
 
-[runner.py](backend/app/pipeline/runner.py) runs validate → transcribe →
-refine → document → export for each uploaded file in a background thread
-(`POST /jobs`, `GET /jobs/{id}`), recording each stage's status and message.
-A failing stage marks the job failed with a user-facing message, later stages
-are skipped, and earlier results are kept. Uploaded and normalised audio is
-deleted when the job ends.
+Both prompts are versioned files in [prompts/](prompts/) and are loaded as the
+system instruction; the model must answer in schema-constrained JSON.
 
-[export.py](backend/app/pipeline/export.py) renders from the same objects:
-`raw_transcript.txt`, `refined_transcript.txt`, `meeting_record.md`
-(human-readable; unstated owners/deadlines shown as "Unspecified"),
-`decisions.json`, `action_items.json`, `action_items.csv` and
-`meeting_record.json` (complete machine-readable record with both transcripts
-and the models used; unstated owners/deadlines are `null`).
+| Prompt | Stage | Purpose |
+|---|---|---|
+| [transcript_refinement_v1.txt](prompts/transcript_refinement_v1.txt) | LLM #1 | Transcript *cleanup*: the raw transcript is authoritative; fix recognition errors, terminology, punctuation and number formatting with minimal edits; preserve meaning, certainty, negation, numbers, dates, names, identifiers, owners and commitments; when unsure, leave it unchanged; report each edit. |
+| [meeting_documentation_v1.txt](prompts/meeting_documentation_v1.txt) | LLM #2 | Meeting *understanding*: the transcript is authoritative; minutes describe discussion; decisions need explicit agreement; proposals stay separate; action items need explicit assignment/commitment; owner/deadline null unless stated; every item cites segment ids and an exact quote. |
+
+The prompts state the rules, but nothing depends on the model following them:
+the deterministic guards enforce every rule afterwards.
+
+## Data contracts ([schemas.py](backend/app/schemas.py))
+
+| Model | Produced by | Key fields |
+|---|---|---|
+| `PreparedAudio` | normalisation | paths, duration, sample rate, channels, source format |
+| `RawTranscript` | speech-to-text | `segments[Segment(id, start, end, text)]`, model, chunk count |
+| `RefinedTranscript` | LLM #1 | `segments` (same ids/times), `refinements[SegmentRefinement(original_text, refined_text, changed, status, changes, issues, rejected_text)]` |
+| `MeetingRecord` | LLM #2 | `summary`, `minutes[MeetingMinute]`, `decisions[Decision]`, `proposals[Proposal]`, `action_items[ActionItem]`, `rejected_items[RejectedItem]` |
+| `Job` | runner | `status`, `current_stage`, per-stage `stages[status, message, times]`, `error`, `error_code`, and the three results above |
+
+All meeting-record models use `extra="forbid"`; the LLM output schemas use
+`additionalProperties: false`, so unexpected fields are rejected.
+
+## API design ([main.py](backend/app/main.py))
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | Liveness and which settings are configured (booleans only) |
+| `POST /jobs` | Upload (multipart `file`); checks type (415) and size (413), then starts the pipeline in a background thread; returns the job (202) |
+| `GET /jobs/{id}` | Job status (`queued` / `running` / `done` / `failed`), `current_stage`, each stage's status and message, `error` + `error_code`, and results |
+| `GET /jobs/{id}/exports` | List of available downloads |
+| `GET /jobs/{id}/exports/{key}` | A download, rendered on request from the job's objects |
+
+A failing stage marks the job failed with a user-facing message and a stable
+code; later stages are `skipped` and earlier results are kept. Unexpected
+exceptions are logged server-side and reported only as a generic message.
+Uploaded and normalised audio, and the per-job folder, are deleted when the
+job ends; only the in-memory results remain (the most recent 50 jobs).
+
+## Export design ([export.py](backend/app/pipeline/export.py))
+
+Every file is rendered from the same `RawTranscript`, `RefinedTranscript` and
+`MeetingRecord` objects that `GET /jobs/{id}` returns to the UI, so the UI and
+all files always agree. Partial results are exportable (e.g. the raw transcript
+after a later stage fails).
+
+| Key | File | Notes |
+|---|---|---|
+| `raw_transcript` | `raw_transcript.txt` | `[hh:mm:ss - hh:mm:ss] (#id) text` |
+| `refined_transcript` | `refined_transcript.txt` | same layout |
+| `minutes` | `meeting_minutes.md` | summary + minutes with segment ids and timestamps |
+| `decisions` / `decisions_json` | `decisions.md` / `decisions.json` | with evidence quote, segment ids and timestamps |
+| `action_items` / `action_items_json` | `action_items.csv` / `action_items.json` | "Not specified" in CSV, `null` in JSON |
+| `meeting_record_md` | `meeting_record.md` | complete human-readable record incl. withheld items |
+| `meeting_record_json` | `meeting_record.json` | `{models, raw_transcript, refined_transcript, meeting_record}` — the Pydantic models' own JSON, so it can be loaded back with `model_validate` |
+
+## User interface ([frontend/app.py](frontend/app.py))
+
+Upload → **Process recording** → live status of the six stages (polled from
+the backend, so a stage is shown as done only when it is) → tabs: Raw
+transcript, Refined transcript, Raw vs refined (per-segment comparison with
+edits and rejected edits), Summary, Minutes, Decisions, Proposals / not agreed,
+Action items (table; "Not specified" for nulls), Withheld / rejected (type,
+attempted content, reasons, cited evidence), Downloads. Failures show the
+backend's message plus a hint keyed on `error_code`; no stack traces or keys
+are ever displayed.
+
+## Testing strategy
+
+- **334 automated tests** (`cd backend && pytest`), offline: Groq and Gemini
+  clients are replaced with fakes; audio tests synthesise real files with ffmpeg.
+  Coverage: audio validation/normalisation, STT parsing and chunking
+  (timestamps, de-duplication, byte limits), refinement and its guards,
+  documentation and its grounding checks (all decision/proposal/action-item
+  rules), Gemini error mapping and fallbacks, the runner (stage order,
+  failures, cleanup), the API (upload limits, status, exports) and exports
+  (Markdown/CSV/JSON consistency, round-trip through the Pydantic models).
+- **Real smoke tests** against Groq and both Gemini models on controlled
+  transcripts during development.
+- **Browser end-to-end test** (Playwright driving Microsoft Edge) on a
+  generated multi-voice meeting: upload, live status, every tab, all nine
+  downloads (JSON parsed, UI ⇄ export consistency), plus empty, corrupted,
+  silent, too-short, no-speech and unsupported files and a backend without API
+  keys. The test scripts are not part of the repository.
+
+## Limitations
+
+- No speaker diarization, so speakers are not identified and "I"/"we" never
+  become owners.
+- Grounding is lexical: it guarantees stated facts appear in the cited
+  evidence and that agreement/commitment wording is present, but cannot fully
+  prove which person in a multi-sentence quote owns a task.
+- Strict decision rule: plans without explicit agreement are not decisions.
+- Free-tier rate limits and model overload (mitigated by retries and, for
+  documentation, a fallback model); the documentation model is a preview model.
+- Jobs live in memory and are lost when the backend restarts.
 
 ## Faithfulness safeguards
 
@@ -260,5 +385,5 @@ and the models used; unstated owners/deadlines are `null`).
 - Every decision, proposal and action item cites segment ids and an exact
   quote; unsupported items are rejected and kept aside for review.
 - Owners and deadlines are kept only when stated in the cited segments;
-  otherwise they are stored as `null` and shown as "Unspecified".
-- JSON and Markdown are rendered from the same object, so they always agree.
+  otherwise they are stored as `null` and shown as "Not specified".
+- The UI and every export are rendered from the same objects, so they always agree.

@@ -5,12 +5,13 @@ import threading
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException, Response, UploadFile
 
 from . import __version__
 from .config import get_settings
 from .jobs import store
 from .pipeline.audio import SUPPORTED_EXTENSIONS
+from .pipeline.export import build_exports
 from .pipeline.runner import run_job
 from .schemas import Job
 
@@ -66,3 +67,24 @@ def get_job(job_id: str) -> Job:
     if job is None:
         raise HTTPException(404, "Job not found.")
     return job
+
+
+def _exports(job_id: str):
+    job = get_job(job_id)
+    return {f.key: f for f in build_exports(job.raw_transcript, job.refined_transcript, job.record)}
+
+
+@app.get("/jobs/{job_id}/exports")
+def list_exports(job_id: str) -> list[dict]:
+    """Downloadable files for a job, built from the same objects as GET /jobs/{id}."""
+    return [{"key": f.key, "label": f.label, "filename": f.filename, "mime": f.mime, "size": len(f.data)}
+            for f in _exports(job_id).values()]
+
+
+@app.get("/jobs/{job_id}/exports/{key}")
+def download_export(job_id: str, key: str) -> Response:
+    file = _exports(job_id).get(key)
+    if file is None:
+        raise HTTPException(404, "That export is not available for this job.")
+    return Response(content=file.data, media_type=file.mime,
+                    headers={"Content-Disposition": f'attachment; filename="{file.filename}"'})

@@ -301,3 +301,39 @@ def test_missing_ffmpeg_is_a_tool_error(tmp_path, out_dir, monkeypatch):
 )
 def test_parse_max_volume(log, expected):
     assert parse_max_volume(log) == expected
+
+
+# ---------------------------------------------------------------------------
+# validate_audio / normalize_audio (the two pipeline stages)
+# ---------------------------------------------------------------------------
+
+
+@needs_ffmpeg
+def test_validate_then_normalize(tmp_path, out_dir):
+    src = make_audio(tmp_path / "m.mp3", duration=2.0, rate=44_100, channels=2)
+    probe = audio.validate_audio(src)
+    assert probe["codec"] == "mp3" and probe["channels"] == 2
+    assert not out_dir.exists(), "validation writes nothing"
+    result = audio.normalize_audio(src, out_dir, probe)
+    assert (result.sample_rate, result.channels) == (16_000, 1)
+
+
+@needs_ffmpeg
+def test_validate_rejects_corrupt_and_short_without_normalising(tmp_path):
+    bad = tmp_path / "bad.mp3"
+    bad.write_bytes(b"not audio at all\n" * 100)
+    with pytest.raises(AudioValidationError):
+        audio.validate_audio(bad)
+    with pytest.raises(AudioValidationError) as exc:
+        audio.validate_audio(make_audio(tmp_path / "s.wav", duration=0.3))
+    assert exc.value.code == "too_short"
+
+
+@needs_ffmpeg
+def test_normalize_rejects_silence(tmp_path, out_dir):
+    src = make_audio(tmp_path / "q.wav", duration=3.0, silent=True)
+    probe = audio.validate_audio(src)  # a silent file is still a valid file
+    with pytest.raises(AudioValidationError) as exc:
+        audio.normalize_audio(src, out_dir, probe)
+    assert exc.value.code == "silent"
+    assert_no_output(out_dir)

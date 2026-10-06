@@ -6,6 +6,8 @@ from app.pipeline.export import (
     action_items_csv,
     build_exports,
     complete_record,
+    decisions_markdown,
+    minutes_markdown,
     record_markdown,
     timestamp,
     transcript_text,
@@ -51,32 +53,33 @@ def make():
 def test_timestamp_and_transcript_text():
     raw, refined, _ = make()
     assert timestamp(3725.5) == "01:02:05"
-    text = transcript_text(raw.segments)
+    text = transcript_text(raw.segments, "Raw transcript")
+    assert text.startswith("Raw transcript\n")
     assert "[00:00:00 - 00:00:04] (#0) we agreed to use cube nettees" in text
     assert "Kubernetes" in transcript_text(refined.segments)
 
 
-def test_markdown_contains_every_section_and_unspecified():
-    _, _, record = make()
-    md = record_markdown(record)
+def test_markdown_contains_every_section_and_not_specified():
+    _, refined, record = make()
+    md = record_markdown(record, refined.segments)
     for heading in ["## Summary", "## Minutes", "## Decisions", "## Proposals", "## Action items",
                     "## Withheld by validation"]:
         assert heading in md
-    assert "| Update the docs | Priya | Unspecified |" in md
-    assert "| Send \\| report | Unspecified | Unspecified |" in md  # pipes escaped in table cells
-    assert "Unspecified | Unspecified" in md
-    assert '"We agreed to use Kubernetes."' in md
+    assert "| Update the docs | Priya | Not specified |" in md
+    assert "| Send \\| report | Not specified | Not specified |" in md  # pipes escaped in table cells
+    assert '#0 @ 00:00:00): "We agreed to use Kubernetes."' in md  # evidence with timestamp
+    assert "#1 @ 00:00:04" in md
 
 
 def test_markdown_and_json_carry_the_same_decisions_and_tasks():
     raw, refined, record = make()
-    md = record_markdown(record)
+    md = record_markdown(record, refined.segments)
     data = complete_record(raw, refined, record)
     for d in data["meeting_record"]["decisions"]:
         assert d["decision"] in md
     for a in data["meeting_record"]["action_items"]:
         assert a["task"].split(" |")[0] in md
-    assert data["meeting_record"]["action_items"][1]["owner"] is None  # null in JSON, not "Unspecified"
+    assert data["meeting_record"]["action_items"][1]["owner"] is None  # null in JSON
     assert data["models"] == {"speech_to_text": "whisper-large-v3", "transcript_refinement": "gemini-3.6-flash",
                               "meeting_documentation": "gemini-3-flash-preview"}
 
@@ -96,17 +99,42 @@ def test_action_items_csv():
     _, _, record = make()
     rows = list(csv.reader(io.StringIO(action_items_csv(record))))
     assert rows[0] == ["task", "owner", "deadline", "evidence_segment_ids", "evidence_quote"]
-    assert rows[1][:3] == ["Update the docs", "Priya", "Unspecified"]
+    assert rows[1][:3] == ["Update the docs", "Priya", "Not specified"]
 
 
 def test_build_exports():
     raw, refined, record = make()
     files = {f.key: f for f in build_exports(raw, refined, record)}
-    assert set(files) == {"raw_transcript", "refined_transcript", "meeting_record_md", "decisions",
-                          "action_items", "action_items_csv", "meeting_record_json"}
+    assert list(files) == ["raw_transcript", "refined_transcript", "minutes", "decisions", "decisions_json",
+                           "action_items", "action_items_json", "meeting_record_md", "meeting_record_json"]
     assert b"cube nettees" in files["raw_transcript"].data
     assert b"Kubernetes" in files["refined_transcript"].data
-    assert json.loads(files["decisions"].data)[0]["decision"] == "Use Kubernetes"
-    full = json.loads(files["meeting_record_json"].data)
-    assert full["raw_transcript"]["segments"][0]["text"] == "we agreed to use cube nettees"
+    assert json.loads(files["decisions_json"].data)[0]["decision"] == "Use Kubernetes"
+    assert b"Use Kubernetes" in files["decisions"].data and b"Try serverless" in files["decisions"].data
+    assert b"## Minutes" in files["minutes"].data and b"## Decisions" not in files["minutes"].data
+    assert json.loads(files["action_items_json"].data)[1]["owner"] is None
     assert files["meeting_record_md"].mime == "text/markdown"
+
+
+def test_full_json_contains_everything_needed_to_reconstruct():
+    raw, refined, record = make()
+    data = json.loads({f.key: f for f in build_exports(raw, refined, record)}["meeting_record_json"].data)
+    assert RawTranscript.model_validate(data["raw_transcript"]) == raw
+    assert RefinedTranscript.model_validate(data["refined_transcript"]) == refined
+    rebuilt = MeetingRecord.model_validate(data["meeting_record"])
+    assert rebuilt == record and rebuilt.rejected_items[0].reasons == ["owner invented"]
+
+
+def test_partial_exports_after_a_failed_stage():
+    raw, _, _ = make()
+    files = {f.key: f for f in build_exports(raw, None, None)}
+    assert list(files) == ["raw_transcript", "meeting_record_json"]
+    assert json.loads(files["meeting_record_json"].data)["meeting_record"] is None
+    assert build_exports(None, None, None) == []
+
+
+def test_minutes_and_decisions_markdown():
+    _, refined, record = make()
+    assert "Kubernetes was chosen." in minutes_markdown(record, refined.segments)
+    md = decisions_markdown(record, refined.segments)
+    assert "Use Kubernetes" in md and "## Proposals" in md

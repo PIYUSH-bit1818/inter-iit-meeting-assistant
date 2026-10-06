@@ -102,7 +102,9 @@ def transcribe(
         Segment(id=i, start=round(s, 3), end=round(e, 3), text=t)
         for i, (s, e, t) in enumerate(collected)
     ]
-    if not any(s.text for s in segments):
+    # Whisper can return lone punctuation (e.g. ".") for non-speech audio such as
+    # tones or music; a transcript without a single letter or digit is no speech.
+    if not any(any(ch.isalnum() for ch in s.text) for s in segments):
         raise SttError(
             "No speech was detected in the recording.", code="no_speech"
         )

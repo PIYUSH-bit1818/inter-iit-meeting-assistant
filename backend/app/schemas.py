@@ -15,7 +15,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-UNSPECIFIED = "Unspecified"
+UNSPECIFIED = "Not specified"
 
 
 def _utcnow() -> datetime:
@@ -205,7 +205,7 @@ class ActionItem(_StrictModel):
         # Blank or placeholder values mean "not stated": store None, never a guess.
         if isinstance(v, str):
             s = v.strip()
-            if not s or s.lower() in {"unspecified", "unknown", "n/a", "na", "none", "null", "tbd"}:
+            if not s or s.lower() in {"unspecified", "not specified", "unknown", "n/a", "na", "none", "null", "tbd"}:
                 return None
             return s
         return v
@@ -255,6 +255,7 @@ class MeetingRecord(_StrictModel):
 
 class StageName(str, Enum):
     VALIDATE = "validate"
+    NORMALIZE = "normalize"
     TRANSCRIBE = "transcribe"
     REFINE = "refine"
     DOCUMENT = "document"
@@ -292,7 +293,11 @@ class Job(BaseModel):
     filename: str
     created_at: datetime = Field(default_factory=_utcnow)
     status: JobStatus = JobStatus.QUEUED
+    # Stage being run right now (None when queued or finished)
+    current_stage: StageName | None = None
+    # User-facing failure message and its stable code (e.g. "silent", "rate_limited")
     error: str | None = None
+    error_code: str | None = None
     stages: list[StageState] = Field(
         default_factory=lambda: [StageState(name=n) for n in PIPELINE_ORDER]
     )
