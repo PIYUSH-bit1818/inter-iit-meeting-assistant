@@ -1,0 +1,51 @@
+# --- Secrets ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+.streamlit/secrets.toml
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+
+# --- Runtime data (uploaded audio, job outputs, temp files) ---
+data/
+uploads/
+tmp/
+*.tmp
+*.log
+
+# Audio/video anywhere except curated samples
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.flac
+*.webm
+*.mp4
+!samples/**/*.wav
+!samples/**/*.mp3
+!samples/**/*.m4a
+
+# --- Problem statement PDF (not part of the submission) ---
+ML Bootcamp.pdf
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
