@@ -12,7 +12,7 @@ def test_health_ok_and_no_secret_values():
     body = resp.json()
     assert body["status"] == "ok"
     assert set(body["config"]) == {
-        "groq_api_key", "anthropic_api_key", "stt_model", "refine_model", "document_model",
+        "groq_api_key", "gemini_api_key", "stt_model", "refine_model", "document_model",
     }
     assert all(isinstance(v, bool) for v in body["config"].values())
 

@@ -4,16 +4,18 @@ from pydantic import ValidationError
 from app.schemas import (
     PIPELINE_ORDER,
     ActionItem,
-    EditDecision,
     Evidence,
     Job,
     JobStatus,
     MeetingRecord,
     RawTranscript,
+    RefinedTranscript,
+    RefinementStatus,
     Segment,
+    SegmentRefinement,
+    SpanChange,
     StageName,
     StageStatus,
-    TranscriptEdit,
 )
 
 EV = Evidence(segment_ids=[0], quote="we agreed")
@@ -49,20 +51,47 @@ class TestRawTranscript:
         assert RawTranscript(segments=[], stt_model="m").text == ""
 
 
-class TestEditDecision:
-    edit = TranscriptEdit(segment_id=0, original="cube nettees", corrected="Kubernetes")
+def refinement(**kw) -> SegmentRefinement:
+    base = dict(segment_id=0, start=0.0, end=1.0, original_text="cube nettees",
+                refined_text="cube nettees", changed=False, status=RefinementStatus.UNCHANGED)
+    return SegmentRefinement(**{**base, **kw})
 
-    def test_rejected_needs_reason(self):
-        with pytest.raises(ValidationError):
-            EditDecision(edit=self.edit, accepted=False)
 
-    def test_accepted_must_not_have_reason(self):
-        with pytest.raises(ValidationError):
-            EditDecision(edit=self.edit, accepted=True, rejection_reason="x")
+class TestSegmentRefinement:
+    def test_unchanged(self):
+        assert refinement().status == RefinementStatus.UNCHANGED
 
-    def test_empty_original_rejected(self):
+    def test_refined_must_differ(self):
         with pytest.raises(ValidationError):
-            TranscriptEdit(segment_id=0, original="", corrected="x")
+            refinement(status=RefinementStatus.REFINED, changed=True)
+        r = refinement(status=RefinementStatus.REFINED, changed=True, refined_text="Kubernetes",
+                       changes=[SpanChange(original_span="cube nettees", refined_span="Kubernetes")])
+        assert r.changed
+
+    def test_fallback_keeps_original_and_needs_issues(self):
+        with pytest.raises(ValidationError):
+            refinement(status=RefinementStatus.FALLBACK)
+        with pytest.raises(ValidationError):
+            refinement(status=RefinementStatus.FALLBACK, refined_text="x", issues=["bad"])
+        r = refinement(status=RefinementStatus.FALLBACK, issues=["numbers changed"], rejected_text="x")
+        assert r.refined_text == r.original_text
+
+    def test_issues_only_on_fallback(self):
+        with pytest.raises(ValidationError):
+            refinement(issues=["x"])
+
+    def test_empty_original_span_rejected(self):
+        with pytest.raises(ValidationError):
+            SpanChange(original_span="", refined_span="x")
+
+
+class TestRefinedTranscript:
+    def test_refinements_must_align_with_segments(self):
+        with pytest.raises(ValidationError):
+            RefinedTranscript(segments=[seg(0), seg(1)], refinements=[refinement(segment_id=1)],
+                              refine_model="m")
+        ok = RefinedTranscript(segments=[seg(0)], refinements=[refinement()], refine_model="m")
+        assert ok.text == "hello"
 
 
 class TestActionItem:

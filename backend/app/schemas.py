@@ -86,37 +86,68 @@ class RawTranscript(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class TranscriptEdit(BaseModel):
-    """A single correction proposed by the refinement model."""
+class SpanChange(BaseModel):
+    """One edit inside a segment, as reported by the refinement model."""
 
-    segment_id: int = Field(ge=0)
-    original: str = Field(min_length=1, description="Exact span from the raw segment")
-    corrected: str
+    original_span: str = Field(min_length=1)
+    refined_span: str
     reason: str = ""
 
 
-class EditDecision(BaseModel):
-    """Outcome of running guards on a proposed edit."""
+class RefinementStatus(str, Enum):
+    UNCHANGED = "unchanged"  # model kept the raw text
+    REFINED = "refined"  # model edit passed every guard
+    FALLBACK = "fallback"  # model edit rejected; raw text kept
 
-    edit: TranscriptEdit
-    accepted: bool
-    rejection_reason: str | None = None
+
+class SegmentRefinement(BaseModel):
+    """Raw vs refined text for one segment, with the audit trail."""
+
+    segment_id: int = Field(ge=0)
+    start: float = Field(ge=0)
+    end: float = Field(ge=0)
+    original_text: str
+    refined_text: str
+    changed: bool
+    status: RefinementStatus
+    changes: list[SpanChange] = Field(default_factory=list)
+    issues: list[str] = Field(default_factory=list, description="Why a refinement was rejected")
+    rejected_text: str | None = Field(default=None, description="The model output that was rejected")
 
     @model_validator(mode="after")
-    def _reason_iff_rejected(self) -> EditDecision:
-        if not self.accepted and not self.rejection_reason:
-            raise ValueError("rejected edits must carry a rejection_reason")
-        if self.accepted and self.rejection_reason:
-            raise ValueError("accepted edits must not carry a rejection_reason")
+    def _consistent(self) -> SegmentRefinement:
+        same = self.refined_text == self.original_text
+        if self.status == RefinementStatus.REFINED:
+            if same or not self.changed:
+                raise ValueError("a refined segment must differ from the original")
+        elif not same or self.changed:
+            raise ValueError(f"{self.status.value} segments must keep the original text")
+        if self.status == RefinementStatus.FALLBACK and not self.issues:
+            raise ValueError("fallback segments must list the issues found")
+        if self.status != RefinementStatus.FALLBACK and (self.issues or self.rejected_text):
+            raise ValueError("only fallback segments carry issues or rejected text")
         return self
 
 
 class RefinedTranscript(BaseModel):
+    """Separate from RawTranscript, which is never modified.
+
+    ``segments`` mirrors the raw segments one-to-one (same ids, timestamps and
+    order) with refined text; ``refinements`` holds the per-segment audit trail.
+    """
+
     segments: list[Segment]
-    edits: list[EditDecision] = Field(default_factory=list)
+    refinements: list[SegmentRefinement] = Field(default_factory=list)
     refine_model: str
+    prompt_version: str | None = None
 
     _unique = field_validator("segments")(_check_unique_ids)
+
+    @model_validator(mode="after")
+    def _refinements_match_segments(self) -> RefinedTranscript:
+        if self.refinements and [r.segment_id for r in self.refinements] != [s.id for s in self.segments]:
+            raise ValueError("refinements must match segments one-to-one and in order")
+        return self
 
     @property
     def text(self) -> str:

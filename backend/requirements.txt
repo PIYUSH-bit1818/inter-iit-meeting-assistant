@@ -8,6 +8,9 @@ python-multipart>=0.0.32
 # Speech-to-text
 groq>=1.7,<2
 
-# Testing
+# Transcript refinement LLM (Google Gemini)
+google-genai>=2.28,<3
+
+# Testing (httpx2 is used by the FastAPI test client)
 pytest>=9.1
 httpx2>=2.13

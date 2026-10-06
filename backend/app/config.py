@@ -18,7 +18,7 @@ class Settings(BaseSettings):
 
     # Credentials (SecretStr keeps them out of reprs and logs)
     groq_api_key: SecretStr | None = None
-    anthropic_api_key: SecretStr | None = None
+    gemini_api_key: SecretStr | None = None
 
     # Speech-to-text (Groq). whisper-large-v3 is Groq's most accurate
     # Whisper model per its docs; override if Groq's model list changes.
@@ -28,8 +28,22 @@ class Settings(BaseSettings):
     groq_max_request_mb: float = Field(default=25, gt=0)
     stt_request_timeout_seconds: float = Field(default=300, gt=0)
 
-    # LLM model IDs - no defaults on purpose; verified before Phase 4
-    refine_model: str | None = None
+    # Transcript refinement (Google Gemini). gemini-3.6-flash was selected from
+    # the live Gemini models list: a stable Flash model on the free tier that
+    # passed a real structured-JSON check (see TECHNICAL.md).
+    refine_model: str = "gemini-3.6-flash"
+    # Comma-separated models tried in order if the primary is overloaded (503/429)
+    refine_fallback_models: str = ""
+    # Gemini 3 thinking level: minimal | low | medium | high
+    refine_thinking_level: str = "low"
+    refine_timeout_seconds: float = Field(default=300, gt=0)
+    # Attempts per model for transient errors (408/429/5xx), with backoff
+    refine_retry_attempts: int = Field(default=4, ge=1)
+    # Segments are sent in batches of roughly this many words
+    refine_max_words_per_request: int = Field(default=1500, gt=0)
+    refine_max_output_tokens: int = Field(default=32768, gt=0)
+
+    # Meeting documentation (Phase 5)
     document_model: str | None = None
 
     # App
@@ -43,9 +57,7 @@ class Settings(BaseSettings):
         """Which pieces of configuration are present (never exposes values)."""
         return {
             "groq_api_key": bool(self.groq_api_key and self.groq_api_key.get_secret_value()),
-            "anthropic_api_key": bool(
-                self.anthropic_api_key and self.anthropic_api_key.get_secret_value()
-            ),
+            "gemini_api_key": bool(self.gemini_api_key and self.gemini_api_key.get_secret_value()),
             "stt_model": bool(self.stt_model),
             "refine_model": bool(self.refine_model),
             "document_model": bool(self.document_model),

@@ -1,21 +1,21 @@
 # Technical Description
 
-_Draft — the LLM model IDs are filled in once verified against the Anthropic API._
+_Draft — the meeting-documentation model is added in Phase 5._
 
 ## Models and roles
 
 | Stage | Model | Role |
 |---|---|---|
 | Speech-to-text | **Groq `whisper-large-v3`** (`STT_MODEL`) | Transcribes the uploaded recording into timestamped segments |
-| Transcript refinement | Anthropic model A (`REFINE_MODEL`) | Proposes minimal corrections to mis-recognised technical terms, acronyms and domain language |
-| Meeting documentation | Anthropic model B (`DOCUMENT_MODEL`) | Produces summary, minutes, decisions, proposals and action items from the refined transcript |
+| Transcript refinement | **Google Gemini `gemini-3.6-flash`** (`REFINE_MODEL`) | Cleans up the raw transcript: mis-recognised technical terms, acronyms, punctuation, number formatting — without changing meaning |
+| Meeting documentation | separate LLM, Phase 5 (`DOCUMENT_MODEL`) | Produces summary, minutes, decisions, proposals and action items from the refined transcript |
 
 ## Data flow
 
 ```
 upload → validate + normalise (ffmpeg) → PreparedAudio (16 kHz mono WAV)
        → Groq Whisper (chunked if needed) → RawTranscript
-       → refinement edits → guards → RefinedTranscript
+       → Gemini refinement (strict JSON) → guards → RefinedTranscript
        → MeetingRecord (structured) → grounding checks → JSON + Markdown
 ```
 
@@ -81,10 +81,82 @@ Nothing is truncated: every part of the recording belongs to exactly one window.
 The Groq SDK retries transient failures (connection errors, 429, 5xx) up to
 three times before an error is raised.
 
+## Stage 2 — transcript refinement ([refine.py](backend/app/pipeline/refine.py), [guards.py](backend/app/pipeline/guards.py))
+
+**Purpose.** Clean up the raw Whisper transcript: fix recognition errors in
+technical terms, acronyms and names, punctuation, capitalisation and number
+formatting — without changing what was said. This is cleanup, not
+summarisation.
+
+**Provider and model.** Google Gemini, **`gemini-3.6-flash`** (`REFINE_MODEL`).
+Selection process (October 2026):
+
+1. Listed the models available to our key via the Gemini Models API and kept
+   those supporting `generateContent`.
+2. Shortlisted the stable (non-preview) Flash models — `gemini-3.5-flash`,
+   `3.6-flash`, `3.7-flash`, `3.8-flash` — all listed as "Free of charge" on
+   the free tier on Google's pricing page. The moving `gemini-flash-latest`
+   alias was avoided so results are reproducible.
+3. Sent each one a real request with our exact JSON schema. `gemini-3.6-flash`
+   returned valid schema-conforming JSON; the others returned HTTP 503
+   ("high demand") repeatedly at the time of testing.
+
+The app uses only the free tier: the key comes from Google AI Studio, no billing
+account is required, and nothing in the code enables paid features. Free-tier
+caveats: rate limits are lower, and Google may use free-tier content to improve
+its products. `REFINE_FALLBACK_MODELS` can list other models to try when the
+primary is overloaded.
+
+**Request.** `generateContent` with
+`response_mime_type="application/json"` and `response_json_schema` (strict
+schema, `additionalProperties: false` everywhere), the versioned system prompt
+[prompts/transcript_refinement_v1.txt](prompts/transcript_refinement_v1.txt),
+and `thinking_level="low"`. Temperature is left at the default because Google
+recommends 1.0 for Gemini 3 models (lower values can cause looping);
+faithfulness is enforced by the schema, the prompt and the guards instead.
+Segments are sent as `{segment_id, text}` only — timestamps are never sent, so
+the model cannot change them. Long transcripts are sent in batches of ~1,500
+words, each with the full transcript attached as read-only context so
+terminology stays consistent.
+
+**Output.** A separate `RefinedTranscript`; the `RawTranscript` is never
+modified. Its `segments` mirror the raw segments one-to-one (same ids,
+timestamps, order) and its `refinements` hold, per segment: original text,
+refined text, `changed`, status (`unchanged` / `refined` / `fallback`), the
+edits with reasons, and for rejected edits the rejected text and the issues.
+
+**Guards.** The model's output is never trusted directly. Each proposed segment
+is compared with the raw text after normalising both to the same form
+(number words → digits, `$42,000` ↔ "forty-two thousand dollars",
+contractions expanded). It is rejected — and the raw text kept — if:
+
+- any number, amount, percentage or version changes, appears or disappears;
+- a negation (not, never, no, can't, won't, …) is added or removed;
+- a certainty/commitment word changes (might, could, will, agreed, decided,
+  maybe, …) — this blocks turning proposals into decisions;
+- a date word (month, weekday, today/tomorrow, …) or currency changes;
+- a name is replaced by something that does not sound alike;
+- a new technical identifier (`S3`, `k8s`, `v2`) appears without support in
+  the raw text;
+- words are added, or meaningful words removed (fillers and stutters may go);
+- a replaced run of words is not a plausible sound-alike correction;
+- the rewrite is too large overall, a question becomes a statement, or the
+  refined text is empty;
+- the model misquotes the original or reports an edit not present in it;
+- the segment is missing from, or duplicated in, the model output.
+
+**Errors.** `RefineError(message, code, retryable)`: `missing_api_key`,
+`config_error`, `auth_failed`, `model_not_found`, `rate_limited`,
+`request_too_large`, `provider_error`, `provider_rejected`, `timeout`,
+`network_error`, `refused` (safety block), `output_truncated`, and
+`invalid_response` (output still not valid JSON for the schema after one
+retry). The SDK retries 408/429/5xx with backoff (`REFINE_RETRY_ATTEMPTS`).
+User-facing messages never include provider error text or the API key.
+
 ## Faithfulness safeguards
 
-- Refinement returns edits rather than a rewritten transcript; edits that alter
-  numbers, negation or names, or that do not match the source text, are rejected.
+- The raw transcript is never modified; refinement produces a separate object
+  and any segment edit that fails a guard falls back to the raw text.
 - Decisions are kept separate from proposals that were not agreed.
 - Owners and deadlines are kept only when present in the cited segments;
   otherwise they are stored as `null` and shown as "Unspecified".
