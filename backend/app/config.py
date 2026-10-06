@@ -43,8 +43,16 @@ class Settings(BaseSettings):
     refine_max_words_per_request: int = Field(default=1500, gt=0)
     refine_max_output_tokens: int = Field(default=32768, gt=0)
 
-    # Meeting documentation (Phase 5)
-    document_model: str | None = None
+    # Meeting documentation (Google Gemini) - a different model from refinement.
+    # gemini-3-flash-preview was the strongest free-tier model that passed a
+    # real structured-JSON check (Pro models need billing; see TECHNICAL.md).
+    document_model: str = "gemini-3-flash-preview"
+    # Tried in order if the primary is overloaded (503/429); verified free tier
+    document_fallback_models: str = "gemini-3.5-flash-lite"
+    document_thinking_level: str = "medium"
+    document_timeout_seconds: float = Field(default=300, gt=0)
+    document_retry_attempts: int = Field(default=4, ge=1)
+    document_max_output_tokens: int = Field(default=32768, gt=0)
 
     # App
     data_dir: Path = REPO_ROOT / "data"

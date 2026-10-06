@@ -1,14 +1,12 @@
 # Technical Description
 
-_Draft — the meeting-documentation model is added in Phase 5._
-
 ## Models and roles
 
 | Stage | Model | Role |
 |---|---|---|
 | Speech-to-text | **Groq `whisper-large-v3`** (`STT_MODEL`) | Transcribes the uploaded recording into timestamped segments |
 | Transcript refinement | **Google Gemini `gemini-3.6-flash`** (`REFINE_MODEL`) | Cleans up the raw transcript: mis-recognised technical terms, acronyms, punctuation, number formatting — without changing meaning |
-| Meeting documentation | separate LLM, Phase 5 (`DOCUMENT_MODEL`) | Produces summary, minutes, decisions, proposals and action items from the refined transcript |
+| Meeting documentation | **Google Gemini `gemini-3-flash-preview`** (`DOCUMENT_MODEL`) | Produces summary, minutes, decisions, proposals and action items from the refined transcript, each item citing its evidence |
 
 ## Data flow
 
@@ -16,7 +14,8 @@ _Draft — the meeting-documentation model is added in Phase 5._
 upload → validate + normalise (ffmpeg) → PreparedAudio (16 kHz mono WAV)
        → Groq Whisper (chunked if needed) → RawTranscript
        → Gemini refinement (strict JSON) → guards → RefinedTranscript
-       → MeetingRecord (structured) → grounding checks → JSON + Markdown
+       → Gemini documentation (strict JSON, different model) → grounding checks → MeetingRecord
+       → JSON + Markdown exports
 ```
 
 Contracts are defined in [backend/app/schemas.py](backend/app/schemas.py).
@@ -153,11 +152,113 @@ contractions expanded). It is rejected — and the raw text kept — if:
 retry). The SDK retries 408/429/5xx with backoff (`REFINE_RETRY_ATTEMPTS`).
 User-facing messages never include provider error text or the API key.
 
+## Stage 3 — meeting documentation ([document.py](backend/app/pipeline/document.py))
+
+**Purpose.** Turn the refined transcript into the meeting record: a summary,
+minutes, decisions, proposals (raised but not agreed) and action items. This
+is the second, separate LLM stage.
+
+**Provider and model.** Google Gemini, **`gemini-3-flash-preview`**
+(`DOCUMENT_MODEL`), with `gemini-3.5-flash-lite` as the default fallback when
+the primary is overloaded (`DOCUMENT_FALLBACK_MODELS`). Selection (October 2026):
+
+1. Stronger models were tried first. `gemini-3.1-pro-preview` and
+   `gemini-pro-latest` returned HTTP 429 "exceeded your current quota" on the
+   free-tier key (Google lists 3.1 Pro as not available on the free tier), and
+   `gemini-2.5-pro` / `gemini-2.5-flash` are "no longer available to new users".
+   `gemini-3.5/3.7/3.8-flash` returned HTTP 503 "high demand" repeatedly.
+2. Of the models that answered, `gemini-3-flash-preview` is the most capable:
+   a full Gemini 3 Flash model with thinking (the alternatives were Flash-Lite
+   models). Google's pricing page lists it as "Free of charge" on the free tier.
+3. A real request with the stage's JSON schema (including nullable
+   `owner`/`deadline`) returned valid output.
+
+**Why a different model from refinement.** The two stages do different jobs:
+refinement makes many small, local edits and needs speed and consistency
+(`gemini-3.6-flash`, low thinking); documentation reasons over the whole
+meeting to tell agreement from discussion and assignment from suggestion
+(`gemini-3-flash-preview`, medium thinking). Separate models, prompts, schemas,
+settings and error messages keep the stages independent; the app refuses to
+start the documentation stage if `DOCUMENT_MODEL` equals `REFINE_MODEL`. The
+Gemini call mechanics (retries, fallbacks, error mapping) are shared in
+[gemini.py](backend/app/pipeline/gemini.py).
+
+**Input.** Only the refined transcript: `{segment_id, start, end, text}` for
+each non-empty segment. The raw transcript is not sent and neither transcript
+is modified.
+
+**Prompt.** [prompts/meeting_documentation_v1.txt](prompts/meeting_documentation_v1.txt)
+states that the transcript is authoritative; nothing may be invented; minutes
+describe discussion; decisions require explicit agreement ("could", "maybe",
+questions and ideas are not decisions); proposals stay separate; action items
+require an explicit assignment or commitment; `owner` and `deadline` are null
+unless stated (no speaker labels, so "I" never yields an owner; relative dates
+are not converted to calendar dates; no "Unknown"/"TBD" placeholders); every
+item needs segment ids and an exact quote; output is strict JSON.
+
+**Output.** Schema-constrained JSON (`response_json_schema`,
+`additionalProperties: false`, nullable owner/deadline) parsed into strict
+Pydantic models (`extra="forbid"`) and turned into a `MeetingRecord`:
+`summary`, `minutes[topic, discussion, segment_ids]`,
+`decisions[decision, evidence_segment_ids, evidence_quote]`,
+`proposals[proposal, evidence_segment_ids, evidence_quote]`,
+`action_items[task, owner|null, deadline|null, evidence_segment_ids, evidence_quote]`,
+and `rejected_items[kind, content, reasons]`.
+
+**Grounding checks** ([guards.py](backend/app/pipeline/guards.py)). Each item
+is validated deterministically and is either kept unchanged or moved to
+`rejected_items` with its reasons — never rewritten:
+
+| Check | Applies to |
+|---|---|
+| Cited segment ids exist | minutes, decisions, proposals, action items |
+| Quote occurs in the cited segments (case/punctuation-insensitive; a quote found only elsewhere is rejected) | decisions, proposals, action items |
+| No number, date word, currency, percentage, name or technical identifier absent from the cited segments | all items (summary: whole transcript) |
+| Negation consistent between claim and quote ("decided not to…" stays negative) | decisions, proposals, action items |
+| Explicit agreement in a cited statement — not a question, not negated ("haven't decided") | decisions |
+| Explicit assignment or commitment ("X will", "can you", "I'll"), not negated ("will not") | action items |
+| Owner is a person named in the evidence; "I", "we", "someone", "the team" are rejected | action items |
+| Deadline wording appears in the evidence (no computed calendar dates) | action items |
+
+If the summary fails its check it is withheld (`summary: null`). Malformed
+output is retried once, then the stage fails with `invalid_response`.
+
+**Errors.** `DocumentError` with the same codes as refinement
+(`missing_api_key`, `config_error`, `auth_failed`, `model_not_found`,
+`rate_limited`, `provider_error`, `timeout`, `network_error`, `refused`,
+`output_truncated`, `invalid_response`) plus `empty_transcript`.
+
+**Known limitations.** The grounding checks are lexical: they verify that
+every fact an item states is present in its evidence and that the evidence
+contains agreement/commitment wording, but cannot fully verify that an owner
+named in a multi-sentence quote is the one doing *this* task. A statement like
+"We will not change the schema" (a plan with no explicit agreement) is
+rejected as a decision by design.
+
+## Orchestration and exports
+
+[runner.py](backend/app/pipeline/runner.py) runs validate → transcribe →
+refine → document → export for each uploaded file in a background thread
+(`POST /jobs`, `GET /jobs/{id}`), recording each stage's status and message.
+A failing stage marks the job failed with a user-facing message, later stages
+are skipped, and earlier results are kept. Uploaded and normalised audio is
+deleted when the job ends.
+
+[export.py](backend/app/pipeline/export.py) renders from the same objects:
+`raw_transcript.txt`, `refined_transcript.txt`, `meeting_record.md`
+(human-readable; unstated owners/deadlines shown as "Unspecified"),
+`decisions.json`, `action_items.json`, `action_items.csv` and
+`meeting_record.json` (complete machine-readable record with both transcripts
+and the models used; unstated owners/deadlines are `null`).
+
 ## Faithfulness safeguards
 
 - The raw transcript is never modified; refinement produces a separate object
   and any segment edit that fails a guard falls back to the raw text.
-- Decisions are kept separate from proposals that were not agreed.
-- Owners and deadlines are kept only when present in the cited segments;
+- Decisions are kept separate from proposals; a decision needs explicit
+  agreement in its cited evidence.
+- Every decision, proposal and action item cites segment ids and an exact
+  quote; unsupported items are rejected and kept aside for review.
+- Owners and deadlines are kept only when stated in the cited segments;
   otherwise they are stored as `null` and shown as "Unspecified".
 - JSON and Markdown are rendered from the same object, so they always agree.

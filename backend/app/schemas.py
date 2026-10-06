@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 UNSPECIFIED = "Unspecified"
 
@@ -159,47 +159,53 @@ class RefinedTranscript(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class Evidence(BaseModel):
-    """Where in the refined transcript an item is grounded."""
-
-    segment_ids: list[int] = Field(min_length=1)
-    quote: str = Field(min_length=1)
+class _StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
 
-class MinutesSection(BaseModel):
+class MeetingMinute(_StrictModel):
+    """One discussion topic. Minutes describe discussion, not decisions."""
+
     topic: str = Field(min_length=1)
-    points: list[str] = Field(default_factory=list)
+    discussion: str = Field(min_length=1)
+    segment_ids: list[int] = Field(min_length=1)
 
 
-class Decision(BaseModel):
-    """Something explicitly agreed in the meeting (not merely proposed)."""
+class Decision(_StrictModel):
+    """Something explicitly agreed, confirmed or approved in the meeting."""
 
-    text: str = Field(min_length=1)
-    evidence: Evidence
+    decision: str = Field(min_length=1)
+    evidence_segment_ids: list[int] = Field(min_length=1)
+    evidence_quote: str = Field(min_length=1, description="Copied exactly from the refined transcript")
 
 
-class Proposal(BaseModel):
+class Proposal(_StrictModel):
     """Raised or suggested but not agreed - kept separate from decisions."""
 
-    text: str = Field(min_length=1)
-    evidence: Evidence
+    proposal: str = Field(min_length=1)
+    evidence_segment_ids: list[int] = Field(min_length=1)
+    evidence_quote: str = Field(min_length=1)
 
 
-class ActionItem(BaseModel):
+class ActionItem(_StrictModel):
+    """An explicitly assigned or committed task.
+
+    ``owner`` and ``deadline`` are None unless the transcript states them.
+    """
+
     task: str = Field(min_length=1)
     owner: str | None = None
     deadline: str | None = None
-    evidence: Evidence
+    evidence_segment_ids: list[int] = Field(min_length=1)
+    evidence_quote: str = Field(min_length=1)
 
     @field_validator("owner", "deadline", mode="before")
     @classmethod
-    def _blank_is_unspecified(cls, v: object) -> object:
-        # Blank or placeholder values mean "not stated" - store as None, never guess.
-        if v is None:
-            return None
+    def _placeholder_is_none(cls, v: object) -> object:
+        # Blank or placeholder values mean "not stated": store None, never a guess.
         if isinstance(v, str):
             s = v.strip()
-            if not s or s.lower() in {"unspecified", "unknown", "n/a", "none", "tbd"}:
+            if not s or s.lower() in {"unspecified", "unknown", "n/a", "na", "none", "null", "tbd"}:
                 return None
             return s
         return v
@@ -213,13 +219,33 @@ class ActionItem(BaseModel):
         return self.deadline or UNSPECIFIED
 
 
-class MeetingRecord(BaseModel):
-    summary: str
-    minutes: list[MinutesSection] = Field(default_factory=list)
+class RecordItemKind(str, Enum):
+    SUMMARY = "summary"
+    MINUTE = "minute"
+    DECISION = "decision"
+    PROPOSAL = "proposal"
+    ACTION_ITEM = "action_item"
+
+
+class RejectedItem(_StrictModel):
+    """Model output that failed validation, kept for review (never shown as fact)."""
+
+    kind: RecordItemKind
+    content: dict
+    reasons: list[str] = Field(min_length=1)
+
+
+class MeetingRecord(_StrictModel):
+    """Structured meeting documentation generated from the refined transcript."""
+
+    summary: str | None = Field(description="None if the generated summary failed validation")
+    minutes: list[MeetingMinute] = Field(default_factory=list)
     decisions: list[Decision] = Field(default_factory=list)
-    proposals_not_agreed: list[Proposal] = Field(default_factory=list)
+    proposals: list[Proposal] = Field(default_factory=list)
     action_items: list[ActionItem] = Field(default_factory=list)
+    rejected_items: list[RejectedItem] = Field(default_factory=list)
     document_model: str
+    prompt_version: str | None = None
 
 
 # ---------------------------------------------------------------------------

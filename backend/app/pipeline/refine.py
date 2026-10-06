@@ -20,7 +20,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass
 from difflib import SequenceMatcher
 from functools import lru_cache
 from typing import Any, Protocol
@@ -36,25 +35,26 @@ from ..schemas import (
     SegmentRefinement,
     SpanChange,
 )
+from .gemini import (
+    GeminiJsonModel,
+    LLMError,
+    ProviderReply,
+    StageLabels,
+    check_config,
+    parse_model_list,
+)
 from .guards import check_refinement
 
 log = logging.getLogger(__name__)
 
 PROMPT_VERSION = "transcript_refinement_v1"
 PROMPT_PATH = REPO_ROOT / "prompts" / f"{PROMPT_VERSION}.txt"
-EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
 # Re-ask once if the model's JSON is unusable, then give up on the batch.
 INVALID_OUTPUT_RETRIES = 1
 
 
-class RefineError(Exception):
+class RefineError(LLMError):
     """Refinement failed. ``message`` is user-facing; ``code`` is stable."""
-
-    def __init__(self, message: str, code: str, *, retryable: bool = False) -> None:
-        super().__init__(message)
-        self.message = message
-        self.code = code
-        self.retryable = retryable
 
 
 @lru_cache
@@ -128,12 +128,6 @@ OUTPUT_SCHEMA: dict[str, Any] = {
 # ---------------------------------------------------------------------------
 # Provider interface
 # ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class ProviderReply:
-    text: str
-    stop_reason: str | None
 
 
 class RefineProvider(Protocol):
@@ -321,181 +315,41 @@ def _squash(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Gemini provider
+# Gemini provider (call mechanics shared with the documentation stage)
 # ---------------------------------------------------------------------------
 
-THINKING_LEVELS = ("minimal", "low", "medium", "high")
-# Finish reasons that mean the response was withheld rather than completed
-_BLOCKED_FINISH = {"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "LANGUAGE", "OTHER"}
-# Errors worth trying the next fallback model for
-_OVERLOADED = {429, 503}
+LABELS = StageLabels(stage="refinement", model_setting="REFINE_MODEL",
+                     thinking_setting="REFINE_THINKING_LEVEL")
 
 
 class GeminiRefineProvider:
     name = "gemini"
 
-    def __init__(
-        self,
-        *,
-        api_key: str,
-        model: str,
-        fallback_models: tuple[str, ...] = (),
-        thinking_level: str = "low",
-        timeout: float = 300,
-        retry_attempts: int = 4,
-        max_output_tokens: int = 32768,
-        client: Any = None,
-    ) -> None:
-        self.model = model
-        self.fallback_models = fallback_models
-        self.thinking_level = thinking_level
-        self.max_output_tokens = max_output_tokens
-        self.models_used: list[str] = []
-        if client is None:
-            from google import genai
-            from google.genai import types
+    def __init__(self, llm: GeminiJsonModel) -> None:
+        self._llm = llm
+        self.model = llm.model
 
-            client = genai.Client(
-                api_key=api_key,
-                http_options=types.HttpOptions(
-                    timeout=int(timeout * 1000),  # milliseconds
-                    # SDK retries 408/429/5xx with exponential backoff
-                    retry_options=types.HttpRetryOptions(attempts=retry_attempts),
-                ),
-            )
-        self._client = client
+    @property
+    def models_used(self) -> list[str]:
+        return self._llm.models_used
 
     @classmethod
     def from_settings(cls, settings: Settings, *, client: Any = None) -> GeminiRefineProvider:
-        key = settings.gemini_api_key.get_secret_value().strip() if settings.gemini_api_key else ""
-        if not key:
-            raise RefineError(
-                "Transcript refinement is not configured: GEMINI_API_KEY is missing. "
-                "Add a Gemini API key (from aistudio.google.com) to your .env file.",
-                code="missing_api_key",
-            )
-        if not settings.refine_model.strip():
-            raise RefineError(
-                "Transcript refinement is not configured: REFINE_MODEL is empty.", code="config_error"
-            )
-        if settings.refine_thinking_level not in THINKING_LEVELS:
-            raise RefineError(
-                f"REFINE_THINKING_LEVEL must be one of {', '.join(THINKING_LEVELS)}.",
-                code="config_error",
-            )
-        fallbacks = tuple(m.strip() for m in settings.refine_fallback_models.split(",") if m.strip())
-        return cls(
+        key = check_config(settings.gemini_api_key, settings.refine_model,
+                           settings.refine_thinking_level, LABELS, RefineError)
+        return cls(GeminiJsonModel(
             api_key=key,
             model=settings.refine_model.strip(),
-            fallback_models=fallbacks,
+            schema=OUTPUT_SCHEMA,
+            labels=LABELS,
+            error_cls=RefineError,
+            fallback_models=parse_model_list(settings.refine_fallback_models),
             thinking_level=settings.refine_thinking_level,
             timeout=settings.refine_timeout_seconds,
             retry_attempts=settings.refine_retry_attempts,
             max_output_tokens=settings.refine_max_output_tokens,
             client=client,
-        )
+        ))
 
     def complete(self, system: str, context: str | None, request: str) -> ProviderReply:
-        from google.genai import errors
-
-        models = (self.model, *self.fallback_models)
-        for i, model in enumerate(models):
-            try:
-                response = self._client.models.generate_content(
-                    model=model,
-                    contents=[context, request] if context else request,
-                    config=self._config(system),
-                )
-            except errors.APIError as exc:
-                if exc.code in _OVERLOADED and i + 1 < len(models):
-                    log.warning("Gemini model %s unavailable (HTTP %s); trying %s",
-                                model, exc.code, models[i + 1])
-                    continue
-                raise _api_error(exc, model) from exc
-            except Exception as exc:
-                if not _is_transport_error(exc):
-                    raise
-                timed_out = "Timeout" in type(exc).__name__
-                raise RefineError(
-                    "The refinement service timed out." if timed_out else
-                    "Could not reach the refinement service. Check the network connection.",
-                    code="timeout" if timed_out else "network_error",
-                    retryable=True,
-                ) from exc
-            if model not in self.models_used:
-                self.models_used.append(model)
-            return _to_reply(response)
-        raise AssertionError("unreachable")
-
-    def _config(self, system: str) -> Any:
-        from google.genai import types
-
-        # Temperature stays at the default: Google recommends 1.0 for Gemini 3
-        # models (lower values can cause looping). Faithfulness comes from the
-        # schema-constrained output, the prompt and the deterministic guards.
-        return types.GenerateContentConfig(
-            system_instruction=system,
-            response_mime_type="application/json",
-            response_json_schema=OUTPUT_SCHEMA,
-            max_output_tokens=self.max_output_tokens,
-            thinking_config=types.ThinkingConfig(thinking_level=self.thinking_level),
-            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-        )
-
-
-def _to_reply(response: Any) -> ProviderReply:
-    feedback = getattr(response, "prompt_feedback", None)
-    if feedback is not None and getattr(feedback, "block_reason", None):
-        return ProviderReply("", "blocked")
-    candidates = getattr(response, "candidates", None) or []
-    if not candidates:
-        return ProviderReply("", "blocked")
-    candidate = candidates[0]
-    finish = getattr(candidate.finish_reason, "name", candidate.finish_reason)
-    if finish == "MAX_TOKENS":
-        return ProviderReply("", "max_tokens")
-    if finish in _BLOCKED_FINISH:
-        return ProviderReply("", "blocked")
-    content = getattr(candidate, "content", None)
-    parts = getattr(content, "parts", None) or []
-    text = "".join(p.text for p in parts if getattr(p, "text", None) and not getattr(p, "thought", False))
-    return ProviderReply(text, "complete")
-
-
-def _api_error(exc: Any, model: str) -> RefineError:
-    # Never include exc.message in user-facing text: keep provider details in logs.
-    code, status = exc.code, (exc.status or "")
-    log.warning("Gemini returned HTTP %s %s for model %s", code, status, model)
-    if code in (401, 403) or _mentions_invalid_key(exc):
-        return RefineError("The Gemini API key was rejected. Check GEMINI_API_KEY.", code="auth_failed")
-    if code == 404:
-        return RefineError(f"Refinement model '{model}' was not found. Check REFINE_MODEL.",
-                           code="model_not_found")
-    if code == 429:
-        return RefineError(
-            "The Gemini free-tier rate limit or quota was reached. Please try again shortly.",
-            code="rate_limited", retryable=True)
-    if code == 413:
-        return RefineError("The transcript was too large for a single refinement request.",
-                           code="request_too_large")
-    if code >= 500:
-        return RefineError("The refinement service is temporarily unavailable. Please try again.",
-                           code="provider_error", retryable=True)
-    return RefineError(f"The refinement service rejected the request (HTTP {code}).",
-                       code="provider_rejected")
-
-
-def _mentions_invalid_key(exc: Any) -> bool:
-    message = str(getattr(exc, "message", "") or "").lower()
-    status = str(getattr(exc, "status", "") or "").upper()
-    return "api key not valid" in message or "API_KEY_INVALID" in status or "api_key_invalid" in message
-
-
-def _is_transport_error(exc: Exception) -> bool:
-    """Connection/timeout errors from httpx or httpx2 (the SDK may use either)."""
-    mro = type(exc).__mro__
-    modules = {cls.__module__.split(".")[0] for cls in mro}
-    names = {cls.__name__ for cls in mro}
-    return bool(modules & {"httpx", "httpx2", "httpcore", "httpcore2"}) and bool(
-        names & {"TransportError", "TimeoutException", "NetworkError", "ConnectError"}
-    )
+        return self._llm.generate(system, [context, request] if context else request)

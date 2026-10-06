@@ -15,7 +15,8 @@ changes stand out. Then:
    percentages, question marks and technical identifiers must be preserved.
 3. Overall similarity: wholesale rewrites are rejected.
 
-Meeting-record grounding checks are added in a later phase.
+The second half of this module grounds the meeting record (decisions,
+proposals, action items, minutes, summary) in the refined transcript.
 """
 
 from __future__ import annotations
@@ -419,4 +420,199 @@ def _check_invariants(raw_toks: list[str], ref_toks: list[str]) -> list[str]:
 def _check_question_marks(raw: str, refined: str) -> list[str]:
     if refined.count("?") < raw.count("?"):
         return ["a question was turned into a statement"]
+    return []
+
+
+# ===========================================================================
+# Meeting-record grounding (documentation stage)
+# ===========================================================================
+#
+# Every decision, proposal and action item must cite real segments and quote
+# them verbatim, and may not state names, numbers, dates, money, owners or
+# deadlines that the cited segments do not contain. Decisions additionally need
+# explicit agreement in the evidence; action items need an explicit assignment
+# or commitment. Items failing any check are rejected, never rewritten.
+
+# Wording that signals something was actually agreed
+AGREEMENT_WORDS = frozenset({
+    "agree", "agreed", "agrees", "decide", "decided", "decides", "decision",
+    "approve", "approved", "approves", "confirm", "confirmed", "confirms",
+    "finalize", "finalized", "finalise", "finalised", "accept", "accepted",
+    "settled", "resolved", "consensus", "unanimous", "unanimously",
+})
+AGREEMENT_PHRASES = (
+    ("go", "ahead"), ("go", "with"), ("sounds", "good"), ("works", "for", "me"), ("signed", "off"),
+)
+# Wording that signals an explicit assignment or commitment
+COMMITMENT_WORDS = frozenset({
+    "will", "shall", "assign", "assigned", "volunteer", "volunteered", "responsible", "please",
+})
+COMMITMENT_PHRASES = (
+    ("can", "you"), ("could", "you"), ("would", "you"), ("going", "to"), ("let", "me"),
+    ("take", "care"), ("action", "item"),
+)
+# Owners that do not identify a person
+NON_OWNERS = frozenset({
+    "i", "me", "we", "us", "you", "they", "them", "he", "she", "him", "her", "it",
+    "someone", "somebody", "anyone", "anybody", "everyone", "everybody", "nobody", "no one",
+    "team", "the team", "speaker", "the speaker", "all", "everyone else", "us all", "myself",
+})
+_DEADLINE_PREFIXES = frozenset({"by", "before", "until", "till", "on", "no", "later", "than", "due", "in"})
+# Second words that mark a claim's first word as a name ("Rahul will ...")
+_NAME_FOLLOWERS = frozenset({
+    "will", "to", "and", "should", "shall", "would", "can", "could", "must", "is", "was",
+    "has", "had", "agreed", "approved", "decided", "owns", "said", "asked", "confirmed",
+})
+
+
+def _match_text(text: str) -> str:
+    """Case/punctuation/whitespace-insensitive form for quote matching."""
+    text = (text or "").translate(str.maketrans({"’": "'", "‘": "'", "“": '"', "”": '"'}))
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", text.lower()).split())
+
+
+def check_evidence(segment_ids: list[int], quote: str, segments: dict[int, str]) -> list[str]:
+    """Cited segments must exist and contain the quote verbatim."""
+    if not segment_ids:
+        return ["no evidence segment ids"]
+    missing = sorted({i for i in segment_ids if i not in segments})
+    if missing:
+        return [f"evidence segment ids do not exist: {missing}"]
+    needle = _match_text(quote)
+    if not needle:
+        return ["evidence quote is empty"]
+    cited = _match_text(" ".join(segments[i] for i in sorted(set(segment_ids))))
+    if needle in cited:
+        return []
+    if needle in _match_text(" ".join(segments[i] for i in sorted(segments))):
+        return ["evidence quote is not in the cited segments"]
+    return ["evidence quote does not appear in the transcript"]
+
+
+def _stem(word: str) -> str:
+    return re.sub(r"(ing|ed|es|s|e)$", "", word)
+
+
+def claim_names(text: str) -> set[str]:
+    """Lowercased capitalised words that are probably names (incl. a leading name)."""
+    names = proper_nouns(text)
+    words = re.findall(r"[A-Za-z][A-Za-z'’]*", text or "")
+    if len(words) >= 2 and words[0][0].isupper():
+        first, second = words[0], words[1].lower()
+        if second in _NAME_FOLLOWERS or first.lower().endswith(("'s", "’s")):
+            names.add(re.sub(r"['’]s$", "", first.lower()))
+    return {n for n in names if n not in FILLERS}
+
+
+def check_facts(claim: str, evidence: str, *, check_names: bool = True) -> list[str]:
+    """``claim`` must not state facts absent from ``evidence``.
+
+    ``check_names=False`` skips the name check, for Title Case headings where
+    every word is capitalised.
+    """
+    issues = []
+    c_toks, e_toks = normalize_tokens(claim), normalize_tokens(evidence)
+    e_set = set(e_toks)
+    e_stems = {_stem(t) for t in e_toks}
+
+    extra_numbers = sorted((numbers_in(c_toks) - numbers_in(e_toks)).elements())
+    if extra_numbers:
+        issues.append(f"numbers not in the evidence: {extra_numbers}")
+    for label, vocab in (("dates", DATE_WORDS),
+                         ("currencies", set(CURRENCY_WORDS.values())),
+                         ("percentages", {"percent"})):
+        extra = sorted(set(_count(c_toks, vocab)) - e_set)
+        if extra:
+            issues.append(f"{label} not in the evidence: {extra}")
+    names = sorted(n for n in (claim_names(claim) if check_names else set())
+                   if n not in e_set and _stem(n) not in e_stems
+                   and n.replace(" ", "") not in compact(e_toks))
+    if names:
+        issues.append(f"names/terms not in the evidence: {names}")
+    idents = sorted(i for i in _identifiers(c_toks) - _identifiers(e_toks)
+                    if i.replace(".", "") not in compact(e_toks).replace(".", ""))
+    if idents:
+        issues.append(f"technical identifiers not in the evidence: {idents}")
+    return issues
+
+
+def _has_negation(text: str) -> bool:
+    return any(t in NEGATIONS for t in normalize_tokens(text))
+
+
+def check_negation(claim: str, quote: str) -> list[str]:
+    if _has_negation(quote) and not _has_negation(claim):
+        return ["evidence is negated but the claim is not"]
+    if _has_negation(claim) and not _has_negation(quote):
+        return ["claim adds a negation not in the evidence"]
+    return []
+
+
+def _sentences(text: str) -> list[str]:
+    return [s for s in re.split(r"(?<=[.!?])\s+", (text or "").strip()) if s]
+
+
+def _find_cue(
+    tokens: list[str],
+    words: frozenset[str],
+    phrases: tuple[tuple[str, ...], ...],
+    *,
+    negated_after: bool,
+) -> bool:
+    """True if a cue appears without a negation right before it (and, when
+    ``negated_after``, right after it: "will not" is no commitment, while
+    "decided not to" is still a decision)."""
+    for i, tok in enumerate(tokens):
+        negated = any(t in NEGATIONS for t in tokens[max(0, i - 2):i]) or (
+            negated_after and i + 1 < len(tokens) and tokens[i + 1] in NEGATIONS)
+        if tok in words and not negated:
+            return True
+        for phrase in phrases:
+            if tuple(tokens[i:i + len(phrase)]) == phrase and not negated:
+                return True
+    return False
+
+
+def has_agreement(evidence: str) -> bool:
+    """Explicit agreement in a statement (not a question, not negated)."""
+    return any(
+        not s.rstrip().endswith("?")
+        and _find_cue(normalize_tokens(s), AGREEMENT_WORDS, AGREEMENT_PHRASES, negated_after=False)
+        for s in _sentences(evidence)
+    )
+
+
+def has_commitment(evidence: str) -> bool:
+    """Explicit assignment or commitment (e.g. "X will", "can you", "I'll")."""
+    return _find_cue(normalize_tokens(evidence), COMMITMENT_WORDS, COMMITMENT_PHRASES, negated_after=True)
+
+
+def check_owner(owner: str | None, evidence: str) -> list[str]:
+    if owner is None:
+        return []
+    o_norm = " ".join(normalize_tokens(owner))
+    if o_norm in NON_OWNERS or not o_norm:
+        return [f"owner {owner!r} does not identify a named person (should be null)"]
+    e_toks = set(normalize_tokens(evidence))
+    missing = [t for t in normalize_tokens(owner) if t not in e_toks]
+    if missing:
+        return [f"owner {owner!r} is not named in the evidence"]
+    first = re.findall(r"[A-Za-z]+", owner)
+    if first and not re.search(rf"\b{re.escape(first[0].capitalize())}\b", evidence or ""):
+        return [f"owner {owner!r} is not named in the evidence"]
+    return []
+
+
+def check_deadline(deadline: str | None, evidence: str) -> list[str]:
+    if deadline is None:
+        return []
+    d_toks = normalize_tokens(deadline)
+    while d_toks and d_toks[0] in _DEADLINE_PREFIXES:
+        d_toks = d_toks[1:]
+    if not d_toks:
+        return [f"deadline {deadline!r} is not a stated time"]
+    e_toks = normalize_tokens(evidence)
+    n = len(d_toks)
+    if not any(e_toks[i:i + n] == d_toks for i in range(len(e_toks) - n + 1)):
+        return [f"deadline {deadline!r} is not stated in the evidence"]
     return []

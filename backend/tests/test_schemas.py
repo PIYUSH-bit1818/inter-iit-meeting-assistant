@@ -4,13 +4,15 @@ from pydantic import ValidationError
 from app.schemas import (
     PIPELINE_ORDER,
     ActionItem,
-    Evidence,
+    Decision,
     Job,
     JobStatus,
+    MeetingMinute,
     MeetingRecord,
     RawTranscript,
     RefinedTranscript,
     RefinementStatus,
+    RejectedItem,
     Segment,
     SegmentRefinement,
     SpanChange,
@@ -18,7 +20,7 @@ from app.schemas import (
     StageStatus,
 )
 
-EV = Evidence(segment_ids=[0], quote="we agreed")
+EV = {"evidence_segment_ids": [0], "evidence_quote": "we agreed"}
 
 
 def seg(i: int, text: str = "hello", start: float = 0.0, end: float = 1.0) -> Segment:
@@ -97,34 +99,53 @@ class TestRefinedTranscript:
 class TestActionItem:
     @pytest.mark.parametrize("value", [None, "", "  ", "Unspecified", "unknown", "N/A", "TBD"])
     def test_missing_owner_and_deadline_become_none(self, value):
-        item = ActionItem(task="Send report", owner=value, deadline=value, evidence=EV)
+        item = ActionItem(task="Send report", owner=value, deadline=value, **EV)
         assert item.owner is None and item.deadline is None
         assert item.owner_display == "Unspecified"
         assert item.deadline_display == "Unspecified"
 
     def test_stated_values_kept(self):
-        item = ActionItem(task="Send report", owner=" Priya ", deadline="Friday", evidence=EV)
+        item = ActionItem(task="Send report", owner=" Priya ", deadline="Friday", **EV)
         assert item.owner == "Priya" and item.deadline == "Friday"
 
     def test_evidence_required(self):
         with pytest.raises(ValidationError):
             ActionItem(task="Send report")
 
-    def test_evidence_needs_segment_ids(self):
+    def test_evidence_needs_segment_ids_and_quote(self):
         with pytest.raises(ValidationError):
-            Evidence(segment_ids=[], quote="x")
+            ActionItem(task="t", evidence_segment_ids=[], evidence_quote="x")
+        with pytest.raises(ValidationError):
+            ActionItem(task="t", evidence_segment_ids=[0], evidence_quote="")
+
+    def test_extra_fields_rejected(self):
+        with pytest.raises(ValidationError):
+            ActionItem(task="t", priority="high", **EV)
+        with pytest.raises(ValidationError):
+            Decision(decision="d", confidence=0.9, **EV)
+
+    def test_minute_needs_segment_ids(self):
+        with pytest.raises(ValidationError):
+            MeetingMinute(topic="t", discussion="d", segment_ids=[])
 
 
 class TestMeetingRecord:
     def test_lists_default_empty(self):
         rec = MeetingRecord(summary="s", document_model="m")
         assert rec.decisions == [] and rec.action_items == []
-        assert rec.proposals_not_agreed == [] and rec.minutes == []
+        assert rec.proposals == [] and rec.minutes == [] and rec.rejected_items == []
+
+    def test_summary_may_be_withheld(self):
+        assert MeetingRecord(summary=None, document_model="m").summary is None
+
+    def test_rejected_item_needs_reasons(self):
+        with pytest.raises(ValidationError):
+            RejectedItem(kind="decision", content={}, reasons=[])
 
     def test_json_roundtrip(self):
         rec = MeetingRecord(
             summary="s",
-            action_items=[ActionItem(task="t", evidence=EV)],
+            action_items=[ActionItem(task="t", **EV)],
             document_model="m",
         )
         again = MeetingRecord.model_validate_json(rec.model_dump_json())
