@@ -238,6 +238,18 @@ It writes `data/demo/demo_meeting.wav` (gitignored). The meeting contains:
 
 Any other English meeting recording can be used instead.
 
+### Shareable demo recording and outputs
+
+[samples/demo_meeting/](samples/demo_meeting/) contains a ready-made demo:
+`meeting.wav` (the synthetic meeting produced by the script above) and the
+files the application generated from it, downloaded from the app's own export
+endpoints: `raw_transcript.txt`, `refined_transcript.txt`,
+`meeting_minutes.md`, `decisions.json`, `action_items.json` and
+`meeting_record.json` (the complete record, including both transcripts,
+evidence and the models used). The recording is synthetic speech, so it is
+safe to share. Re-running it through the app may give slightly different
+wording, since the LLM stages are not fully deterministic.
+
 Suggested demo flow: upload the file → show the six stages completing →
 compare raw vs refined ("Cuba Ernets" → "Kubernetes") → decisions vs
 proposals → action items with "Not specified" → downloads → open

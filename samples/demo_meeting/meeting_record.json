@@ -1,0 +1,605 @@
+{
+  "models": {
+    "speech_to_text": "whisper-large-v3",
+    "transcript_refinement": "gemini-3.6-flash",
+    "meeting_documentation": "gemini-3-flash-preview"
+  },
+  "raw_transcript": {
+    "segments": [
+      {
+        "id": 0,
+        "start": 0.0,
+        "end": 8.0,
+        "text": "Good morning everyone. This is the weekly platform sync for October 7th. Let's start with the Cuba Ernets upgrade."
+      },
+      {
+        "id": 1,
+        "start": 9.58,
+        "end": 18.26,
+        "text": "Thanks Ananya. The staging cluster is still on version 1.27. I think we should go straight to version 1.29."
+      },
+      {
+        "id": 2,
+        "start": 19.38,
+        "end": 22.62,
+        "text": "Does everyone agree with upgrading to 1.29?"
+      },
+      {
+        "id": 3,
+        "start": 24.02,
+        "end": 26.4,
+        "text": "Yes, that works for me."
+      },
+      {
+        "id": 4,
+        "start": 26.4,
+        "end": 35.16,
+        "text": "Great. So we have agreed to upgrade the cluster to version 1.29 before the October 20th release."
+      },
+      {
+        "id": 5,
+        "start": 36.74,
+        "end": 41.96,
+        "text": "The upgrade budget is $42,000, which is about 15% over plan."
+      },
+      {
+        "id": 6,
+        "start": 43.56,
+        "end": 49.9,
+        "text": "Maybe we could also move the nightly backups to 2am, but that's just an idea for now."
+      },
+      {
+        "id": 7,
+        "start": 49.9,
+        "end": 56.62,
+        "text": "For the analytics dashboard, we could try PostgreSQL instead of MySQL."
+      },
+      {
+        "id": 8,
+        "start": 58.36,
+        "end": 60.26,
+        "text": "Let's not decide either of those today."
+      },
+      {
+        "id": 9,
+        "start": 61.08,
+        "end": 63.54,
+        "text": "Has everyone agreed to the new on-call rotation?"
+      },
+      {
+        "id": 10,
+        "start": 64.7,
+        "end": 69.04,
+        "text": "Not yet. I still have concerns about the weekend shifts."
+      },
+      {
+        "id": 11,
+        "start": 70.56,
+        "end": 75.52,
+        "text": "Okay. We also decided not to change the database schema during this sprint."
+      },
+      {
+        "id": 12,
+        "start": 75.52,
+        "end": 80.88,
+        "text": "Rahul, can you update the API documentation by Friday?"
+      },
+      {
+        "id": 13,
+        "start": 82.12,
+        "end": 84.62,
+        "text": "Sure, I'll have it done by Friday"
+      },
+      {
+        "id": 14,
+        "start": 84.62,
+        "end": 89.16,
+        "text": "I'll send the cost report to the finance team"
+      },
+      {
+        "id": 15,
+        "start": 89.16,
+        "end": 94.34,
+        "text": "Someone should probably review the monitoring alerts at some point"
+      },
+      {
+        "id": 16,
+        "start": 94.34,
+        "end": 98.04,
+        "text": "We also need to update the onboarding guide"
+      },
+      {
+        "id": 17,
+        "start": 98.04,
+        "end": 101.28,
+        "text": "Thanks everyone, see you next week"
+      }
+    ],
+    "language": "en",
+    "duration_seconds": 102.688,
+    "stt_model": "whisper-large-v3",
+    "stt_provider": "groq",
+    "chunk_count": 1
+  },
+  "refined_transcript": {
+    "segments": [
+      {
+        "id": 0,
+        "start": 0.0,
+        "end": 8.0,
+        "text": "Good morning, everyone. This is the weekly platform sync for October 7th. Let's start with the Kubernetes upgrade."
+      },
+      {
+        "id": 1,
+        "start": 9.58,
+        "end": 18.26,
+        "text": "Thanks, Ananya. The staging cluster is still on version 1.27. I think we should go straight to version 1.29."
+      },
+      {
+        "id": 2,
+        "start": 19.38,
+        "end": 22.62,
+        "text": "Does everyone agree with upgrading to 1.29?"
+      },
+      {
+        "id": 3,
+        "start": 24.02,
+        "end": 26.4,
+        "text": "Yes, that works for me."
+      },
+      {
+        "id": 4,
+        "start": 26.4,
+        "end": 35.16,
+        "text": "Great. So we have agreed to upgrade the cluster to version 1.29 before the October 20th release."
+      },
+      {
+        "id": 5,
+        "start": 36.74,
+        "end": 41.96,
+        "text": "The upgrade budget is $42,000, which is about 15% over plan."
+      },
+      {
+        "id": 6,
+        "start": 43.56,
+        "end": 49.9,
+        "text": "Maybe we could also move the nightly backups to 2 a.m., but that's just an idea for now."
+      },
+      {
+        "id": 7,
+        "start": 49.9,
+        "end": 56.62,
+        "text": "For the analytics dashboard, we could try PostgreSQL instead of MySQL."
+      },
+      {
+        "id": 8,
+        "start": 58.36,
+        "end": 60.26,
+        "text": "Let's not decide either of those today."
+      },
+      {
+        "id": 9,
+        "start": 61.08,
+        "end": 63.54,
+        "text": "Has everyone agreed to the new on-call rotation?"
+      },
+      {
+        "id": 10,
+        "start": 64.7,
+        "end": 69.04,
+        "text": "Not yet. I still have concerns about the weekend shifts."
+      },
+      {
+        "id": 11,
+        "start": 70.56,
+        "end": 75.52,
+        "text": "Okay. We also decided not to change the database schema during this sprint."
+      },
+      {
+        "id": 12,
+        "start": 75.52,
+        "end": 80.88,
+        "text": "Rahul, can you update the API documentation by Friday?"
+      },
+      {
+        "id": 13,
+        "start": 82.12,
+        "end": 84.62,
+        "text": "Sure, I'll have it done by Friday."
+      },
+      {
+        "id": 14,
+        "start": 84.62,
+        "end": 89.16,
+        "text": "I'll send the cost report to the finance team."
+      },
+      {
+        "id": 15,
+        "start": 89.16,
+        "end": 94.34,
+        "text": "Someone should probably review the monitoring alerts at some point."
+      },
+      {
+        "id": 16,
+        "start": 94.34,
+        "end": 98.04,
+        "text": "We also need to update the onboarding guide."
+      },
+      {
+        "id": 17,
+        "start": 98.04,
+        "end": 101.28,
+        "text": "Thanks everyone, see you next week."
+      }
+    ],
+    "refinements": [
+      {
+        "segment_id": 0,
+        "start": 0.0,
+        "end": 8.0,
+        "original_text": "Good morning everyone. This is the weekly platform sync for October 7th. Let's start with the Cuba Ernets upgrade.",
+        "refined_text": "Good morning, everyone. This is the weekly platform sync for October 7th. Let's start with the Kubernetes upgrade.",
+        "changed": true,
+        "status": "refined",
+        "changes": [
+          {
+            "original_span": "Cuba Ernets",
+            "refined_span": "Kubernetes",
+            "reason": "Fix phonetic speech recognition error for Kubernetes"
+          }
+        ],
+        "issues": [],
+        "rejected_text": null
+      },
+      {
+        "segment_id": 1,
+        "start": 9.58,
+        "end": 18.26,
+        "original_text": "Thanks Ananya. The staging cluster is still on version 1.27. I think we should go straight to version 1.29.",
+        "refined_text": "Thanks, Ananya. The staging cluster is still on version 1.27. I think we should go straight to version 1.29.",
+        "changed": true,
+        "status": "refined",
+        "changes": [
+          {
+            "original_span": "Thanks",
+            "refined_span": "Thanks,",
+            "reason": "not itemised by the model; derived from diff"
+          }
+        ],
+        "issues": [],
+        "rejected_text": null
+      },
+      {
+        "segment_id": 2,
+        "start": 19.38,
+        "end": 22.62,
+        "original_text": "Does everyone agree with upgrading to 1.29?",
+        "refined_text": "Does everyone agree with upgrading to 1.29?",
+        "changed": false,
+        "status": "unchanged",
+        "changes": [],
+        "issues": [],
+        "rejected_text": null
+      },
+      {
+        "segment_id": 3,
+        "start": 24.02,
+        "end": 26.4,
+        "original_text": "Yes, that works for me.",
+        "refined_text": "Yes, that works for me.",
+        "changed": false,
+        "status": "unchanged",
+        "changes": [],
+        "issues": [],
+        "rejected_text": null
+      },
+      {
+        "segment_id": 4,
+        "start": 26.4,
+        "end": 35.16,
+        "original_text": "Great. So we have agreed to upgrade the cluster to version 1.29 before the October 20th release.",
+        "refined_text": "Great. So we have agreed to upgrade the cluster to version 1.29 before the October 20th release.",
+        "changed": false,
+        "status": "unchanged",
+        "changes": [],
+        "issues": [],
+        "rejected_text": null
+      },
+      {
+        "segment_id": 5,
+        "start": 36.74,
+        "end": 41.96,
+        "original_text": "The upgrade budget is $42,000, which is about 15% over plan.",
+        "refined_text": "The upgrade budget is $42,000, which is about 15% over plan.",
+        "changed": false,
+        "status": "unchanged",
+        "changes": [],
+        "issues": [],
+        "rejected_text": null
+      },
+      {
+        "segment_id": 6,
+        "start": 43.56,
+        "end": 49.9,
+        "original_text": "Maybe we could also move the nightly backups to 2am, but that's just an idea for now.",
+        "refined_text": "Maybe we could also move the nightly backups to 2 a.m., but that's just an idea for now.",
+        "changed": true,
+        "status": "refined",
+        "changes": [
+          {
+            "original_span": "2am",
+            "refined_span": "2 a.m.",
+            "reason": "Standard time formatting"
+          }
+        ],
+        "issues": [],
+        "rejected_text": null
+      },
+      {
+        "segment_id": 7,
+        "start": 49.9,
+        "end": 56.62,
+        "original_text": "For the analytics dashboard, we could try PostgreSQL instead of MySQL.",
+        "refined_text": "For the analytics dashboard, we could try PostgreSQL instead of MySQL.",
+        "changed": false,
+        "status": "unchanged",
+        "changes": [],
+        "issues": [],
+        "rejected_text": null
+      },
+      {
+        "segment_id": 8,
+        "start": 58.36,
+        "end": 60.26,
+        "original_text": "Let's not decide either of those today.",
+        "refined_text": "Let's not decide either of those today.",
+        "changed": false,
+        "status": "unchanged",
+        "changes": [],
+        "issues": [],
+        "rejected_text": null
+      },
+      {
+        "segment_id": 9,
+        "start": 61.08,
+        "end": 63.54,
+        "original_text": "Has everyone agreed to the new on-call rotation?",
+        "refined_text": "Has everyone agreed to the new on-call rotation?",
+        "changed": false,
+        "status": "unchanged",
+        "changes": [],
+        "issues": [],
+        "rejected_text": null
+      },
+      {
+        "segment_id": 10,
+        "start": 64.7,
+        "end": 69.04,
+        "original_text": "Not yet. I still have concerns about the weekend shifts.",
+        "refined_text": "Not yet. I still have concerns about the weekend shifts.",
+        "changed": false,
+        "status": "unchanged",
+        "changes": [],
+        "issues": [],
+        "rejected_text": null
+      },
+      {
+        "segment_id": 11,
+        "start": 70.56,
+        "end": 75.52,
+        "original_text": "Okay. We also decided not to change the database schema during this sprint.",
+        "refined_text": "Okay. We also decided not to change the database schema during this sprint.",
+        "changed": false,
+        "status": "unchanged",
+        "changes": [],
+        "issues": [],
+        "rejected_text": null
+      },
+      {
+        "segment_id": 12,
+        "start": 75.52,
+        "end": 80.88,
+        "original_text": "Rahul, can you update the API documentation by Friday?",
+        "refined_text": "Rahul, can you update the API documentation by Friday?",
+        "changed": false,
+        "status": "unchanged",
+        "changes": [],
+        "issues": [],
+        "rejected_text": null
+      },
+      {
+        "segment_id": 13,
+        "start": 82.12,
+        "end": 84.62,
+        "original_text": "Sure, I'll have it done by Friday",
+        "refined_text": "Sure, I'll have it done by Friday.",
+        "changed": true,
+        "status": "refined",
+        "changes": [
+          {
+            "original_span": "Friday",
+            "refined_span": "Friday.",
+            "reason": "not itemised by the model; derived from diff"
+          }
+        ],
+        "issues": [],
+        "rejected_text": null
+      },
+      {
+        "segment_id": 14,
+        "start": 84.62,
+        "end": 89.16,
+        "original_text": "I'll send the cost report to the finance team",
+        "refined_text": "I'll send the cost report to the finance team.",
+        "changed": true,
+        "status": "refined",
+        "changes": [
+          {
+            "original_span": "team",
+            "refined_span": "team.",
+            "reason": "not itemised by the model; derived from diff"
+          }
+        ],
+        "issues": [],
+        "rejected_text": null
+      },
+      {
+        "segment_id": 15,
+        "start": 89.16,
+        "end": 94.34,
+        "original_text": "Someone should probably review the monitoring alerts at some point",
+        "refined_text": "Someone should probably review the monitoring alerts at some point.",
+        "changed": true,
+        "status": "refined",
+        "changes": [
+          {
+            "original_span": "point",
+            "refined_span": "point.",
+            "reason": "not itemised by the model; derived from diff"
+          }
+        ],
+        "issues": [],
+        "rejected_text": null
+      },
+      {
+        "segment_id": 16,
+        "start": 94.34,
+        "end": 98.04,
+        "original_text": "We also need to update the onboarding guide",
+        "refined_text": "We also need to update the onboarding guide.",
+        "changed": true,
+        "status": "refined",
+        "changes": [
+          {
+            "original_span": "guide",
+            "refined_span": "guide.",
+            "reason": "not itemised by the model; derived from diff"
+          }
+        ],
+        "issues": [],
+        "rejected_text": null
+      },
+      {
+        "segment_id": 17,
+        "start": 98.04,
+        "end": 101.28,
+        "original_text": "Thanks everyone, see you next week",
+        "refined_text": "Thanks everyone, see you next week.",
+        "changed": true,
+        "status": "refined",
+        "changes": [
+          {
+            "original_span": "week",
+            "refined_span": "week.",
+            "reason": "not itemised by the model; derived from diff"
+          }
+        ],
+        "issues": [],
+        "rejected_text": null
+      }
+    ],
+    "refine_model": "gemini-3.6-flash",
+    "prompt_version": "transcript_refinement_v1"
+  },
+  "meeting_record": {
+    "summary": "The weekly platform sync for October 7th covered infrastructure upgrades and documentation tasks. The team agreed to upgrade the staging cluster to Kubernetes version 1.29 before the October 20th release and decided to maintain the current database schema for the duration of the sprint. No agreement was reached regarding the new on-call rotation or proposed changes to backup schedules and database types.",
+    "minutes": [
+      {
+        "topic": "Kubernetes Upgrade",
+        "discussion": "The team discussed upgrading the staging cluster from version 1.27. It was noted that the upgrade budget is $42,000, which is 15% over the initial plan.",
+        "segment_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      {
+        "topic": "Infrastructure and Database Proposals",
+        "discussion": "Proposals were made to move nightly backups to 2 a.m. and to switch the analytics dashboard to PostgreSQL, but these were deferred. The team confirmed there will be no database schema changes during this sprint.",
+        "segment_ids": [
+          6,
+          7,
+          8,
+          11
+        ]
+      },
+      {
+        "topic": "On-call Rotation",
+        "discussion": "The team reviewed the new on-call rotation, but concerns regarding weekend shifts prevented a final agreement.",
+        "segment_ids": [
+          9,
+          10
+        ]
+      },
+      {
+        "topic": "Documentation and Reporting",
+        "discussion": "Assignments were made for updating API documentation and delivering a cost report to the finance team. The team also noted a need to review monitoring alerts and update onboarding guides.",
+        "segment_ids": [
+          12,
+          13,
+          14,
+          15,
+          16
+        ]
+      }
+    ],
+    "decisions": [
+      {
+        "decision": "Upgrade the cluster to version 1.29 before the October 20th release.",
+        "evidence_segment_ids": [
+          4
+        ],
+        "evidence_quote": "So we have agreed to upgrade the cluster to version 1.29 before the October 20th release."
+      },
+      {
+        "decision": "Do not change the database schema during this sprint.",
+        "evidence_segment_ids": [
+          11
+        ],
+        "evidence_quote": "We also decided not to change the database schema during this sprint."
+      }
+    ],
+    "proposals": [
+      {
+        "proposal": "Move nightly backups to 2 a.m.",
+        "evidence_segment_ids": [
+          6
+        ],
+        "evidence_quote": "Maybe we could also move the nightly backups to 2 a.m., but that's just an idea for now."
+      },
+      {
+        "proposal": "Use PostgreSQL instead of MySQL for the analytics dashboard.",
+        "evidence_segment_ids": [
+          7
+        ],
+        "evidence_quote": "For the analytics dashboard, we could try PostgreSQL instead of MySQL."
+      }
+    ],
+    "action_items": [
+      {
+        "task": "Update the API documentation",
+        "owner": "Rahul",
+        "deadline": "Friday",
+        "evidence_segment_ids": [
+          12
+        ],
+        "evidence_quote": "Rahul, can you update the API documentation by Friday?"
+      },
+      {
+        "task": "Send the cost report to the finance team",
+        "owner": null,
+        "deadline": null,
+        "evidence_segment_ids": [
+          14
+        ],
+        "evidence_quote": "I'll send the cost report to the finance team."
+      }
+    ],
+    "rejected_items": [],
+    "document_model": "gemini-3-flash-preview",
+    "prompt_version": "meeting_documentation_v1"
+  }
+}

@@ -1,0 +1,20 @@
+Raw transcript (whisper-large-v3)
+
+[00:00:00 - 00:00:08] (#0) Good morning everyone. This is the weekly platform sync for October 7th. Let's start with the Cuba Ernets upgrade.
+[00:00:09 - 00:00:18] (#1) Thanks Ananya. The staging cluster is still on version 1.27. I think we should go straight to version 1.29.
+[00:00:19 - 00:00:22] (#2) Does everyone agree with upgrading to 1.29?
+[00:00:24 - 00:00:26] (#3) Yes, that works for me.
+[00:00:26 - 00:00:35] (#4) Great. So we have agreed to upgrade the cluster to version 1.29 before the October 20th release.
+[00:00:36 - 00:00:41] (#5) The upgrade budget is $42,000, which is about 15% over plan.
+[00:00:43 - 00:00:49] (#6) Maybe we could also move the nightly backups to 2am, but that's just an idea for now.
+[00:00:49 - 00:00:56] (#7) For the analytics dashboard, we could try PostgreSQL instead of MySQL.
+[00:00:58 - 00:01:00] (#8) Let's not decide either of those today.
+[00:01:01 - 00:01:03] (#9) Has everyone agreed to the new on-call rotation?
+[00:01:04 - 00:01:09] (#10) Not yet. I still have concerns about the weekend shifts.
+[00:01:10 - 00:01:15] (#11) Okay. We also decided not to change the database schema during this sprint.
+[00:01:15 - 00:01:20] (#12) Rahul, can you update the API documentation by Friday?
+[00:01:22 - 00:01:24] (#13) Sure, I'll have it done by Friday
+[00:01:24 - 00:01:29] (#14) I'll send the cost report to the finance team
+[00:01:29 - 00:01:34] (#15) Someone should probably review the monitoring alerts at some point
+[00:01:34 - 00:01:38] (#16) We also need to update the onboarding guide
+[00:01:38 - 00:01:41] (#17) Thanks everyone, see you next week
