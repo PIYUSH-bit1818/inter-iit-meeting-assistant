@@ -270,7 +270,16 @@ def test_exports_endpoints_match_the_job(api, tmp_path, pipeline):
     listing = client.get(f"/jobs/{job.id}/exports").json()
     assert [f["key"] for f in listing] == [
         "raw_transcript", "refined_transcript", "minutes", "decisions", "decisions_json",
-        "action_items", "action_items_json", "meeting_record_md", "meeting_record_json"]
+        "action_items", "action_items_json", "meeting_record_md", "meeting_record_json",
+        *[f"{doc}_{fmt}" for doc in ("raw_transcript", "refined_transcript", "minutes", "decisions",
+                                     "action_items", "meeting_record") for fmt in ("pdf", "docx")]]
+    pdf = client.get(f"/jobs/{job.id}/exports/action_items_pdf")
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF-")
+    assert pdf.headers["content-type"] == "application/pdf"
+    assert 'filename="action_items.pdf"' in pdf.headers["content-disposition"]
+    docx = client.get(f"/jobs/{job.id}/exports/decisions_docx")
+    assert docx.status_code == 200 and docx.content.startswith(b"PK"), "DOCX is a zip container"
+    assert client.get(f"/jobs/{job.id}/exports").json() == listing, "finished job exports are stable (cached)"
     resp = client.get(f"/jobs/{job.id}/exports/meeting_record_json")
     assert resp.status_code == 200
     assert 'filename="meeting_record.json"' in resp.headers["content-disposition"]

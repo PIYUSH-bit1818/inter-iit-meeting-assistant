@@ -15,6 +15,7 @@ import json
 from dataclasses import dataclass
 
 from ..schemas import MeetingRecord, RawTranscript, RefinedTranscript, Segment
+from . import documents
 
 NOT_SPECIFIED = "Not specified"
 
@@ -166,8 +167,24 @@ def _json(data: object) -> bytes:
 
 
 def build_exports(raw: RawTranscript | None, refined: RefinedTranscript | None,
+                  record: MeetingRecord | None, source_name: str | None = None) -> list[ExportFile]:
+    """All downloadable files available for one meeting (partial results allowed).
+
+    Text/Markdown/CSV/JSON files come first, then a PDF and a Word version of
+    each deliverable (raw transcript, refined transcript, minutes, key
+    decisions, action items, complete record).
+    """
+    files = _data_exports(raw, refined, record)
+    for doc in documents.build_documents(raw, refined, record, source_name):
+        files.append(ExportFile(f"{doc.key}_pdf", f"{doc.title} (PDF)", f"{doc.filename_stem}.pdf",
+                                documents.PDF_MIME, documents.render_pdf(doc)))
+        files.append(ExportFile(f"{doc.key}_docx", f"{doc.title} (Word)", f"{doc.filename_stem}.docx",
+                                documents.DOCX_MIME, documents.render_docx(doc)))
+    return files
+
+
+def _data_exports(raw: RawTranscript | None, refined: RefinedTranscript | None,
                   record: MeetingRecord | None) -> list[ExportFile]:
-    """All downloadable files available for one meeting (partial results allowed)."""
     md, js, txt = "text/markdown", "application/json", "text/plain"
     files: list[ExportFile] = []
     if raw:

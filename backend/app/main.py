@@ -13,7 +13,7 @@ from .jobs import store
 from .pipeline.audio import SUPPORTED_EXTENSIONS
 from .pipeline.export import build_exports
 from .pipeline.runner import run_job
-from .schemas import Job
+from .schemas import Job, JobStatus
 
 app = FastAPI(title="Meeting Assistant API", version=__version__)
 
@@ -69,9 +69,26 @@ def get_job(job_id: str) -> Job:
     return job
 
 
+# A finished job never changes, so its export files (incl. PDF/Word, which take
+# a moment to render) are built once and reused. Bounded like the job store.
+_export_cache: dict[str, dict] = {}
+_export_lock = threading.Lock()
+_EXPORT_CACHE_SIZE = 20
+
+
 def _exports(job_id: str):
     job = get_job(job_id)
-    return {f.key: f for f in build_exports(job.raw_transcript, job.refined_transcript, job.record)}
+    finished = job.status in (JobStatus.DONE, JobStatus.FAILED)
+    with _export_lock:
+        if finished and job_id in _export_cache:
+            return _export_cache[job_id]
+        files = {f.key: f for f in build_exports(job.raw_transcript, job.refined_transcript, job.record,
+                                                 source_name=job.filename)}
+        if finished:
+            while len(_export_cache) >= _EXPORT_CACHE_SIZE:
+                _export_cache.pop(next(iter(_export_cache)))
+            _export_cache[job_id] = files
+        return files
 
 
 @app.get("/jobs/{job_id}/exports")

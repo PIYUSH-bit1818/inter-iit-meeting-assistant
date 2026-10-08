@@ -84,7 +84,8 @@ def run_job(job_id: str, source: Path, store: JobStore, settings: Settings | Non
 
         current = StageName.EXPORT
         start(current)
-        files = export.build_exports(job.raw_transcript, job.refined_transcript, job.record)
+        files = export.build_exports(job.raw_transcript, job.refined_transcript, job.record,
+                                     source_name=job.filename)
         finish(current, f"{len(files)} files ready")
 
         job.status = JobStatus.DONE

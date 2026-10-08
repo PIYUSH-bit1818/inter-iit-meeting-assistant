@@ -106,7 +106,14 @@ def test_build_exports():
     raw, refined, record = make()
     files = {f.key: f for f in build_exports(raw, refined, record)}
     assert list(files) == ["raw_transcript", "refined_transcript", "minutes", "decisions", "decisions_json",
-                           "action_items", "action_items_json", "meeting_record_md", "meeting_record_json"]
+                           "action_items", "action_items_json", "meeting_record_md", "meeting_record_json",
+                           *[f"{doc}_{fmt}" for doc in ("raw_transcript", "refined_transcript", "minutes",
+                                                        "decisions", "action_items", "meeting_record")
+                             for fmt in ("pdf", "docx")]]
+    assert files["action_items_pdf"].filename == "action_items.pdf"
+    assert files["action_items_pdf"].mime == "application/pdf"
+    assert files["decisions_docx"].filename == "key_decisions.docx"
+    assert files["decisions_docx"].mime.endswith("wordprocessingml.document")
     assert b"cube nettees" in files["raw_transcript"].data
     assert b"Kubernetes" in files["refined_transcript"].data
     assert json.loads(files["decisions_json"].data)[0]["decision"] == "Use Kubernetes"
@@ -128,7 +135,7 @@ def test_full_json_contains_everything_needed_to_reconstruct():
 def test_partial_exports_after_a_failed_stage():
     raw, _, _ = make()
     files = {f.key: f for f in build_exports(raw, None, None)}
-    assert list(files) == ["raw_transcript", "meeting_record_json"]
+    assert list(files) == ["raw_transcript", "meeting_record_json", "raw_transcript_pdf", "raw_transcript_docx"]
     assert json.loads(files["meeting_record_json"].data)["meeting_record"] is None
     assert build_exports(None, None, None) == []
 
