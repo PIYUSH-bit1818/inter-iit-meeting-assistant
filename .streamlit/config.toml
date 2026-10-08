@@ -1,0 +1,19 @@
+# Streamlit theme for the Meeting Assistant UI (no secrets here).
+[theme]
+base = "dark"
+primaryColor = "#3B82F6"
+backgroundColor = "#081A38"
+secondaryBackgroundColor = "#0F2552"
+textColor = "#E6EDF7"
+font = "sans serif"
+
+[server]
+# Matches the backend's default MAX_UPLOAD_MB
+maxUploadSize = 100
+
+[browser]
+gatherUsageStats = false
+
+[client]
+# "viewer" hides developer tools such as the Deploy button
+toolbarMode = "viewer"
