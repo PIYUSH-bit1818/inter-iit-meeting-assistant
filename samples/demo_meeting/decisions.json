@@ -1,16 +1,16 @@
 [
   {
-    "decision": "Upgrade the cluster to version 1.29 before the October 20th release.",
-    "evidence_segment_ids": [
-      4
-    ],
-    "evidence_quote": "So we have agreed to upgrade the cluster to version 1.29 before the October 20th release."
-  },
-  {
-    "decision": "Do not change the database schema during this sprint.",
+    "decision": "Migrate the Kubernetes cluster to version 1.29.",
     "evidence_segment_ids": [
       11
     ],
-    "evidence_quote": "We also decided not to change the database schema during this sprint."
+    "evidence_quote": "We will migrate the Kubernetes cluster to version 1.29."
+  },
+  {
+    "decision": "No changes will be made to the database schema during this sprint.",
+    "evidence_segment_ids": [
+      14
+    ],
+    "evidence_quote": "we have decided that we will not change the database schema during this sprint"
   }
 ]

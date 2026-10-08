@@ -1,20 +1,37 @@
-Refined transcript (gemini-3.6-flash)
+Refined transcript (gemini-3.8-flash)
 
-[00:00:00 - 00:00:08] (#0) Good morning, everyone. This is the weekly platform sync for October 7th. Let's start with the Kubernetes upgrade.
-[00:00:09 - 00:00:18] (#1) Thanks, Ananya. The staging cluster is still on version 1.27. I think we should go straight to version 1.29.
-[00:00:19 - 00:00:22] (#2) Does everyone agree with upgrading to 1.29?
-[00:00:24 - 00:00:26] (#3) Yes, that works for me.
-[00:00:26 - 00:00:35] (#4) Great. So we have agreed to upgrade the cluster to version 1.29 before the October 20th release.
-[00:00:36 - 00:00:41] (#5) The upgrade budget is $42,000, which is about 15% over plan.
-[00:00:43 - 00:00:49] (#6) Maybe we could also move the nightly backups to 2 a.m., but that's just an idea for now.
-[00:00:49 - 00:00:56] (#7) For the analytics dashboard, we could try PostgreSQL instead of MySQL.
-[00:00:58 - 00:01:00] (#8) Let's not decide either of those today.
-[00:01:01 - 00:01:03] (#9) Has everyone agreed to the new on-call rotation?
-[00:01:04 - 00:01:09] (#10) Not yet. I still have concerns about the weekend shifts.
-[00:01:10 - 00:01:15] (#11) Okay. We also decided not to change the database schema during this sprint.
-[00:01:15 - 00:01:20] (#12) Rahul, can you update the API documentation by Friday?
-[00:01:22 - 00:01:24] (#13) Sure, I'll have it done by Friday.
-[00:01:24 - 00:01:29] (#14) I'll send the cost report to the finance team.
-[00:01:29 - 00:01:34] (#15) Someone should probably review the monitoring alerts at some point.
-[00:01:34 - 00:01:38] (#16) We also need to update the onboarding guide.
-[00:01:38 - 00:01:41] (#17) Thanks everyone, see you next week.
+[00:00:00 - 00:00:07] (#0) Good morning, everyone. Thanks for joining. Let's get started with the platform sync for this week.
+[00:00:07 - 00:00:09] (#1) Morning, Rahul.
+[00:00:09 - 00:00:10] (#2) Good morning.
+[00:00:10 - 00:00:15] (#3) First item on the agenda. Priya, can you give us a quick update?
+[00:00:15 - 00:00:25] (#4) Sure. Kubernetes is the main one. Our staging cluster is still on version 1.27, and support for that version ends soon.
+[00:00:25 - 00:00:37] (#5) Right. I tested version 1.29 on a separate cluster last week. The deployment went through without problems, and our API services came up cleanly.
+[00:00:38 - 00:00:41] (#6) Did you see any issues with the CI/CD pipeline?
+[00:00:42 - 00:00:48] (#7) Only a small one. Two of the build jobs needed an updated image, but that's already fixed.
+[00:00:49 - 00:00:56] (#8) Okay. Based on the discussion, are we agreed that we'll migrate the Kubernetes cluster to version 1.29?
+[00:00:57 - 00:00:58] (#9) Yes, I agree.
+[00:00:58 - 00:01:00] (#10) Yes, that works for me.
+[00:01:01 - 00:01:07] (#11) Great. That's our decision then. We will migrate the Kubernetes cluster to version 1.29.
+[00:01:08 - 00:01:16] (#12) Next, the database. I know some people wanted to rename a few tables, but I don't think that's a good idea right now.
+[00:01:16 - 00:01:22] (#13) I agree. Changing the schema in the middle of a migration feels risky.
+[00:01:22 - 00:01:38] (#14) So to be clear we have decided that we will not change the database schema during this sprint Everyone okay with that Yes Agreed While we on the database should we also consider moving the reporting database to PostgreSQL
+[00:01:39 - 00:01:45] (#15) Maybe, but I don't think that's necessary right now. Let's discuss that next week.
+[00:01:45 - 00:01:50] (#16) Yes, let's leave that open for now. Another idea. Maybe we could schedule
+[00:01:50 - 00:01:55] (#17) the nightly backup at 2 a.m. instead of midnight, when traffic is lower.
+[00:01:55 - 00:02:00] (#18) Could be. Let's look at the traffic numbers first and come back to it next week.
+[00:02:01 - 00:02:05] (#19) On that note, we need to think about improving the backup process in general.
+[00:02:06 - 00:02:09] (#20) And someone should probably review the monitoring alerts at some point.
+[00:02:10 - 00:02:12] (#21) We get a lot of noise at night.
+[00:02:13 - 00:02:16] (#22) Fair points. Let's talk about the budget.
+[00:02:16 - 00:02:20] (#23) The current budget for the migration is $42,000.
+[00:02:20 - 00:02:25] (#24) That should be enough, as long as we don't add new nodes before the release.
+[00:02:26 - 00:02:28] (#25) We'll send the updated cost report to the finance team.
+[00:02:29 - 00:02:31] (#26) Good. One more question.
+[00:02:32 - 00:02:35] (#27) Has everyone agreed to the new deployment schedule?
+[00:02:35 - 00:02:40] (#28) Not yet. I still have some concerns about the weekend releases.
+[00:02:40 - 00:02:43] (#29) Okay, then we'll keep that one open.
+[00:02:43 - 00:02:49] (#30) Rahul, please update the deployment documentation by Friday, October 10th.
+[00:02:49 - 00:02:53] (#31) Sure, I'll do that. I think that covers everything.
+[00:02:54 - 00:02:57] (#32) Thanks, everyone. Talk to you next week.
+[00:02:57 - 00:02:59] (#33) Thanks, bye.
+[00:02:59 - 00:02:59] (#34) Bye.
