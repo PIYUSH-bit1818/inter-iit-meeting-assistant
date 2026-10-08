@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scripted — Technical Report</title>
+<style>
+  @page { size: A4; margin: 15mm 15mm 16mm 15mm; }
+  :root { --ink:#16213A; --muted:#55627A; --blue:#1D4ED8; --blue-soft:#E8EFFD; --line:#D5DCE8; --ok:#0F766E; --bad:#B42318; }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--ink); font-family: "Segoe UI", Arial, sans-serif; font-size: 10pt; line-height: 1.45; }
+  h1 { font-size: 22pt; margin: 0; letter-spacing: -0.01em; }
+  h1 span { color: var(--blue); }
+  h2 { font-size: 13pt; color: var(--blue); margin: 16pt 0 5pt; padding-bottom: 3pt; border-bottom: 1.5px solid var(--blue-soft);
+       break-after: avoid; }
+  h3 { font-size: 10.5pt; margin: 9pt 0 3pt; break-after: avoid; }
+  p { margin: 0 0 6pt; }
+  ul { margin: 0 0 6pt 0; padding-left: 15pt; }
+  li { margin: 1.5pt 0; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 9pt; background: #F1F4F9; padding: 0 2pt; border-radius: 2pt; }
+  .head { display: flex; align-items: center; gap: 14pt; padding-bottom: 8pt; border-bottom: 2px solid var(--blue); }
+  .logo { width: 50pt; height: 50pt; border-radius: 11pt; background: #0E2350; display: flex; align-items: center;
+          justify-content: center; flex: 0 0 auto; }
+  .logo svg { width: 84%; height: 84%; }
+  .sub { color: var(--muted); font-size: 10pt; margin-top: 2pt; }
+  .meta { color: var(--muted); font-size: 8.5pt; margin-top: 3pt; }
+  table { width: 100%; border-collapse: collapse; margin: 4pt 0 8pt; font-size: 9pt; break-inside: auto; }
+  th { background: var(--blue); color: #fff; text-align: left; padding: 4pt 6pt; font-weight: 600; }
+  td { border: 1px solid var(--line); padding: 4pt 6pt; vertical-align: top; }
+  tr { break-inside: avoid; }
+  tr:nth-child(even) td { background: #F7F9FC; }
+  .flow { display: flex; flex-wrap: wrap; gap: 4pt; align-items: stretch; margin: 6pt 0 8pt; }
+  .box { flex: 1 1 0; min-width: 0; border: 1px solid var(--line); border-top: 3px solid var(--blue); border-radius: 5pt;
+         padding: 5pt 6pt; background: #FAFBFE; font-size: 8.3pt; line-height: 1.3; }
+  .box b { display: block; font-size: 8.8pt; color: var(--ink); margin-bottom: 2pt; }
+  .box.llm { border-top-color: #7C3AED; }
+  .box.stt { border-top-color: #0891B2; }
+  .box i { color: var(--muted); font-style: normal; display: block; margin-top: 3pt; }
+  .arrow { align-self: center; color: var(--muted); font-size: 11pt; flex: 0 0 auto; }
+  .note { background: var(--blue-soft); border-left: 3px solid var(--blue); padding: 5pt 8pt; border-radius: 0 4pt 4pt 0;
+          margin: 6pt 0 8pt; font-size: 9.3pt; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt; }
+  .k { color: var(--muted); }
+  .ok { color: var(--ok); font-weight: 600; }
+  .bad { color: var(--bad); font-weight: 600; }
+  .avoid { break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<div class="head">
+  <div class="logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(2.5 0.5)"><path d="M14.5 21.5 Q13.5 31 16.5 40.5 H31" stroke="#60A5FA" stroke-width="2.6"/><path d="M23.5 41 V50 M17 51.5 H30" stroke="#60A5FA" stroke-width="2.6"/><circle cx="17" cy="54.2" r="1.6" fill="#60A5FA"/><circle cx="30" cy="54.2" r="1.6" fill="#60A5FA"/><path d="M23.8 24.5 L20.8 37.5 H31.5 V49.5 H35.5" stroke="#FFFFFF" stroke-width="4.4"/><path d="M24.2 26.5 L29.5 32.5 L36.5 30.4" stroke="#FFFFFF" stroke-width="3.6"/><circle cx="26" cy="15.4" r="5.6" fill="#FFFFFF"/><path d="M21.4 14.2 A7.1 7.1 0 0 1 32.4 11.6" stroke="#22D3EE" stroke-width="2.4"/><rect x="19.2" y="13.2" width="3.8" height="6.2" rx="1.8" fill="#22D3EE"/><path d="M34.5 31.5 H53" stroke="#60A5FA" stroke-width="2.6"/><rect x="38.6" y="11" width="7.2" height="12.6" rx="3.6" stroke="#22D3EE" stroke-width="2.4"/><path d="M39.6 16 H44.8 M39.6 19 H44.8" stroke="#22D3EE" stroke-width="1.4"/><path d="M36.4 19.5 A5.8 5.8 0 0 0 48 19.5" stroke="#22D3EE" stroke-width="2"/><path d="M42.2 25.4 V31" stroke="#22D3EE" stroke-width="2.4"/></g></svg></div>
+  <div>
+    <h1>Script<span>ed</span> — AI Meeting Assistant</h1>
+    <div class="sub">Technical report · Inter IIT Tech Meet, ML Bootcamp problem statement</div>
+    <div class="meta">Repository: github.com/PIYUSH-bit1818/inter-iit-meeting-assistant · October 2026</div>
+  </div>
+</div>
+
+<h2>1. Summary</h2>
+<p>Scripted turns a recorded English meeting into a <b>raw transcript</b>, a <b>refined transcript</b>,
+<b>meeting minutes</b>, <b>key decisions</b> and <b>action items</b>. A FastAPI backend runs six stages:
+audio validation and normalization (FFmpeg), speech-to-text (<b>Whisper large-v3</b> on Groq), transcript
+refinement (<b>LLM 1</b>, Gemini), meeting documentation (<b>LLM 2</b>, a different Gemini model) and export.
+A Streamlit interface uploads the recording, shows live progress and presents and downloads every result.
+Deterministic code checks both language models: a refinement that changes meaning is rejected, and a
+decision or action item that is not supported by a verbatim transcript quote is withheld instead of shown.</p>
+
+<h2>2. Models and their roles</h2>
+<table>
+  <tr><th style="width:17%">Stage</th><th style="width:22%">Model</th><th>Role</th><th style="width:22%">Input → output</th></tr>
+  <tr><td><b>Speech-to-text</b></td>
+      <td><code>whisper-large-v3</code><br><span class="k">Groq API</span></td>
+      <td>Transcribes the normalized audio in English with segment timestamps (<code>verbose_json</code>).
+          Recordings above the 25 MB request limit are split into ≤ 10-minute windows with 10 s overlap; each
+          segment is kept by the window whose midpoint owns it, so nothing is duplicated or lost.</td>
+      <td>16 kHz mono WAV → <b>raw transcript</b>: segments with id, start, end, text</td></tr>
+  <tr><td><b>LLM 1</b><br>Transcript refinement</td>
+      <td><code>gemini-3.6-flash</code>, thinking level <i>low</i><br><span class="k">Google Gemini API; optional
+          fallback models (e.g. <code>gemini-3.8-flash</code>, <code>gemini-3.1-flash-lite</code>) on 429/503</span></td>
+      <td>Corrects recognition errors, domain terminology, punctuation and formatting, segment by segment. It may not
+          add, remove, summarize or reinterpret content. Batches of ≤ 1,500 words, with the full transcript as
+          terminology context; structured JSON output.</td>
+      <td>Raw transcript → per-segment proposals → <b>refined transcript</b> (same ids and timestamps)</td></tr>
+  <tr><td><b>LLM 2</b><br>Meeting documentation</td>
+      <td><code>gemini-3-flash-preview</code>, thinking level <i>medium</i><br><span class="k">fallback
+          <code>gemini-3.5-flash-lite</code></span></td>
+      <td>Writes the summary, minutes by topic, decisions, proposals and action items. Every item cites evidence
+          segment ids and a verbatim quote; owner and deadline are <code>null</code> unless stated. JSON schema
+          enforced with <code>response_json_schema</code>.</td>
+      <td>Refined transcript with segment ids → <b>meeting record</b></td></tr>
+</table>
+<p>The two language models do different jobs. Refinement is a narrow, high-volume editing task, so it uses a fast Flash model
+with low thinking. Documentation has to reason across the whole meeting (agreement versus proposal, who owns a task,
+whether a deadline was stated), so it uses a different model with more thinking. Model IDs were taken from the live
+Gemini model list for our free-tier key rather than guessed, and every model is configurable in <code>.env</code>
+(<code>STT_MODEL</code>, <code>REFINE_MODEL</code>, <code>DOCUMENT_MODEL</code>, <code>*_FALLBACK_MODELS</code>).
+The models that actually served a job are recorded in its output and shown in the UI.</p>
+
+<h2>3. Pipeline and data flow</h2>
+<div class="flow avoid">
+  <div class="box"><b>1 · Validate</b>ffprobe: container, audio stream, duration ≥ 1 s, ≤ 100 MB, not silent (peak &gt; −50 dB)</div>
+  <div class="arrow">→</div>
+  <div class="box"><b>2 · Normalize</b>FFmpeg → 16 kHz mono PCM WAV<i>PreparedAudio</i></div>
+  <div class="arrow">→</div>
+  <div class="box stt"><b>3 · Transcribe</b>Whisper large-v3 (Groq), chunked if large<i>RawTranscript</i></div>
+  <div class="arrow">→</div>
+  <div class="box llm"><b>4 · Refine</b>LLM 1 + refinement guards<i>RefinedTranscript</i></div>
+  <div class="arrow">→</div>
+  <div class="box llm"><b>5 · Document</b>LLM 2 + grounding checks<i>MeetingRecord</i></div>
+  <div class="arrow">→</div>
+  <div class="box"><b>6 · Export</b>PDF, Word, Markdown, TXT, JSON, CSV<i>21 files</i></div>
+</div>
+<ul>
+  <li><b>Jobs.</b> <code>POST /jobs</code> stores the upload and runs the stages in a background thread. Each stage records its
+      status, start and finish time, message and error code. The UI polls <code>GET /jobs/{id}</code> every second and shows the
+      real stage states, an elapsed clock and a rough time-left estimate.</li>
+  <li><b>Typed hand-offs.</b> Stages pass strict Pydantic objects (unknown fields rejected):
+      <code>PreparedAudio → RawTranscript → RefinedTranscript → MeetingRecord</code>. The raw transcript is never modified;
+      the refined transcript keeps the same segment ids and timestamps and lists every accepted and rejected change.</li>
+  <li><b>Traceability.</b> LLM 2 reads the refined text, but its evidence refers to the same segment ids, so every decision and
+      action item can be traced back to the raw speech-to-text output.</li>
+  <li><b>Exports.</b> All formats are rendered from the same objects (<code>GET /jobs/{id}/exports/{key}</code>), so the
+      human-readable (PDF, Word, Markdown) and machine-readable (JSON, CSV) records always list the same decisions and tasks.
+      The uploaded audio and intermediate files are deleted when the job ends.</li>
+</ul>
+
+<h2>4. Preventing hallucination</h2>
+<div class="cols">
+<div>
+<h3>Refinement guards (per segment)</h3>
+<ul>
+  <li>Word-level diff against the raw text. Changes must be small, local replacements (≤ 6 words, ≤ 2 extra words
+      per replacement) that resemble the original (similarity ≥ 0.5; ≥ 0.75 for proper nouns). The whole segment
+      must stay ≥ 0.6 similar.</li>
+  <li>Numbers (including spelled-out forms such as “forty k”), dates, money, negations and modal verbs must be preserved.
+      No new words may be introduced; only filler words (“um”, “uh”) may be dropped.</li>
+  <li>A failing edit is rejected: the segment keeps its raw text and the rejection is reported with its reason.</li>
+</ul>
+</div>
+<div>
+<h3>Documentation grounding checks (per item)</h3>
+<ul>
+  <li>The evidence quote must appear in the cited segments, and numbers, dates, money and names in the item must appear
+      in the evidence.</li>
+  <li>A <b>decision</b> needs an explicit, non-negated agreement cue (agreed, decided, approved, confirmed…); otherwise
+      it is a proposal. An <b>action item</b> needs an assignment or commitment.</li>
+  <li><b>Owner</b> and <b>deadline</b> must be stated in the evidence. Otherwise they are <code>null</code>, shown as
+      “Not specified”, and never guessed.</li>
+  <li>Items that fail are withheld with their reasons (UI “Safety checks” and the complete record), never shown as facts.</li>
+</ul>
+</div>
+</div>
+
+<h2>5. Results on the shared demo recording</h2>
+<p><code>samples/demo_meeting/</code> is a 180 s synthetic meeting between three fictional speakers, made with Windows
+text-to-speech (no real people, no copyrighted audio). It includes decisions, proposals, a question, action items with and
+without owner and deadline, technical terms, numbers, a date and money. The folder holds the outputs of a real run of the application:</p>
+<table class="avoid">
+  <tr><th style="width:22%">Stage</th><th>Result</th></tr>
+  <tr><td>Speech-to-text</td><td>35 segments, 407 words, one request (<code>whisper-large-v3</code>)</td></tr>
+  <tr><td>Refinement</td><td>2 segments corrected — “Cuba Ernets” → <b>“Kubernetes”</b>, “CI-CD” → “CI/CD”; 32 unchanged;
+      <span class="bad">1 edit rejected</span> (it added the word “are”). This run was served by the fallback
+      <code>gemini-3.8-flash</code> while <code>gemini-3.6-flash</code> was returning 503 errors.</td></tr>
+  <tr><td>Decisions (2)</td><td>Migrate the Kubernetes cluster to version 1.29 · No changes to the database schema this sprint</td></tr>
+  <tr><td>Proposals (5)</td><td>Kept separate from decisions, e.g. moving the reporting database to PostgreSQL, a 2 a.m. nightly backup</td></tr>
+  <tr><td>Action items (2)</td><td>Update the deployment documentation — owner <b>Rahul</b>, deadline <b>Friday, October 10th</b> ·
+      Send the updated cost report to the finance team — owner and deadline <b>Not specified</b></td></tr>
+  <tr><td>Minutes</td><td>A summary and 4 topics; 0 items withheld</td></tr>
+  <tr><td>Processing time</td><td>95–120 s for this 3-minute recording, 197 s for a 7.6-minute one. Transcription takes most of the time, mainly
+      the audio upload (≈ 0.24 s per second of audio on our connection); refinement 26–64 s, documentation 8–20 s, export 2–5 s.</td></tr>
+</table>
+
+<h2>6. Verification</h2>
+<ul>
+  <li><b>348 automated tests</b> (pytest, providers mocked): audio validation and normalization, chunking and segment ownership,
+      refinement guards, grounding checks, schemas, exports (PDF and Word text identical to the JSON record) and API and runner error paths.</li>
+  <li><b>Browser end-to-end test</b> (Playwright, headless Microsoft Edge): <span class="ok">33/33 checks</span> on a real run.
+      It covers upload, live progress with elapsed time and estimate, the results sections and all 20 downloads, which open
+      and match the UI. It also confirms “Not specified” for missing owners and deadlines, and that no secret or internal path
+      appears in the page or files.</li>
+  <li><b>Error paths:</b> empty, corrupt, silent, too short, oversized and unsupported files, and provider failures (rate limit,
+      timeout, authentication, invalid output). Each produces a plain-language message with a suggested next step and a stable error code.</li>
+</ul>
+
+<h2>7. Engineering notes and limitations</h2>
+<ul>
+  <li><b>Secrets:</b> API keys are read from <code>.env</code> as secret values, never logged or shown in the UI, and
+      <code>.env</code> is excluded from git.</li>
+  <li><b>Resilience:</b> Gemini calls retry and fall back to the next configured model on 429/503. A long provider outage can
+      still fail a job, with a clear message.</li>
+  <li><b>No speaker diarization:</b> Whisper does not label speakers, so an owner is assigned only when a name is spoken in the
+      evidence.</li>
+  <li><b>Scope:</b> English only. Jobs live in memory, so a restart clears them and the app runs as a single process. Uploading
+      compressed audio instead of 16-bit WAV would shorten transcription.</li>
+</ul>
+
+</body>
+</html>
