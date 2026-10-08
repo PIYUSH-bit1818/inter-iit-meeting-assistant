@@ -1,6 +1,6 @@
-# Meeting Assistant — Inter IIT Bootcamp Phase 2 (ML PS)
+# Scripted — AI Meeting Assistant (Inter IIT Bootcamp Phase 2, ML PS)
 
-An AI meeting assistant that turns a recorded English meeting into an accurate
+**Scripted** is an AI meeting assistant that turns a recorded English meeting into an accurate
 transcript and a trustworthy written record: a raw transcript, a separately
 refined transcript, and a meeting summary, minutes, decisions, proposals and
 action items — every item backed by a quote from the recording.
@@ -102,7 +102,7 @@ Never share or commit `.env` (it is gitignored).
 | `DOCUMENT_FALLBACK_MODELS` | no | `gemini-3.5-flash-lite` | Models to try if stage 2's model is overloaded |
 | `DOCUMENT_THINKING_LEVEL` | no | `medium` | `minimal` / `low` / `medium` / `high` |
 | `MAX_UPLOAD_MB` | no | `100` | Maximum upload size |
-| `BACKEND_URL` | no | `http://localhost:8000` | Where the Streamlit app finds the backend |
+| `BACKEND_URL` | no | `http://127.0.0.1:8000` | Where the Streamlit app finds the backend (use 127.0.0.1 rather than localhost: on Windows, localhost adds a ~2 s IPv6 delay per request) |
 
 Leave optional variables commented out rather than set to an empty value.
 
@@ -120,20 +120,29 @@ Terminal 2 — frontend (from the repo root):
 streamlit run frontend/app.py
 ```
 
-Open http://localhost:8501. The sidebar shows whether the backend is reachable
-and which keys are configured (yes/no only; values are never shown).
+Open http://localhost:8501. The UI never displays API keys, environment
+variables or other configuration; if the backend is unreachable it shows a
+"Service unavailable" notice.
 
 ## 8. Using the application
 
-1. Choose a recording (WAV, MP3, M4A, OGG, FLAC, WEBM or MP4). The selected file name is shown.
-2. Click **Process recording**.
-3. Watch the six stages: validation → normalization → transcription →
-   refinement → documentation → export. Each shows *running*, *done*,
-   *failed* or *skipped* from the backend's real state, with a short result
-   (e.g. "18 segments", "2 decisions, 2 proposals, 2 action items").
-4. Explore the tabs: **Raw transcript**, **Refined transcript**, **Raw vs
-   refined**, **Summary**, **Minutes**, **Decisions**, **Proposals / not
-   agreed**, **Action items**, **Withheld / rejected**, **Downloads**.
+1. Drag a recording onto the upload area or browse for it (WAV, MP3, M4A, OGG,
+   FLAC, WEBM or MP4). The selected file is shown as a file card.
+2. Click **Process Meeting**.
+3. Follow the processing panel: a live elapsed-time clock, a rough estimate
+   of the time left (from the recording length and the transcript's word
+   count, calibrated on real runs), a loading
+   indicator, a progress bar (stages completed out of six), the stage
+   currently running and for how long, and the six stage cards —
+   validation → normalization → transcription → refinement → documentation →
+   export — each with its real status and duration. When it finishes, the
+   panel shows the total processing time.
+4. Explore the results through the section buttons: **Overview** (summary,
+   minutes, statistics), **Transcript** (raw, refined, and raw-vs-refined
+   comparison), **Decisions & Actions** (decisions, action items, proposals /
+   not agreed, safety checks), and **Downloads**.
+5. In **Downloads**, get every deliverable as a **PDF or Word** document, plus
+   the machine-readable files.
 
 If something goes wrong (unsupported, empty, corrupted, silent or too-short
 file; no speech; missing key; provider rate limit or outage; malformed model
@@ -192,6 +201,20 @@ downloaded if refinement fails. Uploaded audio is deleted after processing.
 
 ## 12. Exports
 
+Every deliverable required by the problem statement is downloadable as a
+**PDF** and as a **Word (.docx)** document:
+
+| Deliverable | Files | Contents |
+|---|---|---|
+| Raw transcript | `raw_transcript.pdf` / `.docx` | Speech-to-text result before refinement, timestamped |
+| Refined transcript | `refined_transcript.pdf` / `.docx` | Transcript after terminology correction, plus a table of every correction made and any rejected by the safety checks |
+| Meeting minutes | `meeting_minutes.pdf` / `.docx` | Concise summary and the main discussion points, with segment references |
+| Key decisions | `key_decisions.pdf` / `.docx` | Decisions reached, each with its evidence quote; proposals listed separately as not agreed ("No decisions were reached" when empty) |
+| Action items | `action_items.pdf` / `.docx` | Table of task, owner, deadline and evidence ("Not specified" when not stated; "No action items were assigned" when empty) |
+| Complete meeting record | `meeting_record.pdf` / `.docx` | All of the above plus withheld items and both transcripts as appendices |
+
+Machine-readable and plain-text files are also available:
+
 | File | Format | Contents |
 |---|---|---|
 | `raw_transcript.txt` | text | Timestamped raw segments |
@@ -203,8 +226,13 @@ downloaded if refinement fails. Uploaded audio is deleted after processing.
 | `meeting_record.json` | JSON | Everything: raw transcript, refined transcript (with per-segment edits), summary, minutes, decisions, proposals, action items, withheld items, models used |
 
 The backend generates every file from the same objects the UI displays, so the
-UI, Markdown, CSV and JSON never disagree. Unstated owners and deadlines are
-`null` in JSON and "Not specified" in human-readable files.
+UI, PDF, Word, Markdown, CSV and JSON never disagree. Unstated owners and
+deadlines are `null` in JSON and "Not specified" in human-readable files.
+PDFs use a Unicode system font (Segoe UI or Arial on Windows, DejaVu or
+Liberation Sans on Linux, Arial on macOS); `PDF_FONT_REGULAR` and
+`PDF_FONT_BOLD` can point to other TTF files. Without such a font, PDFs fall
+back to a built-in font and a few symbols are written in ASCII (e.g. "→" as
+"->").
 
 ## 13. Testing
 
@@ -213,16 +241,18 @@ cd backend
 pytest
 ```
 
-334 automated tests cover audio validation and normalization (with real
+348 automated tests cover audio validation and normalization (with real
 ffmpeg-generated fixtures), speech-to-text and chunking, refinement and its
-guards, documentation and its grounding checks, the pipeline runner, the API
-and the exports. All external services are mocked, so the tests need no API
-keys and make no network calls.
+guards, documentation and its grounding checks, the pipeline runner, the API,
+and the exports including the PDF and Word documents (their text is read back
+and checked against the record). All external services are mocked, so the
+tests need no API keys and make no network calls.
 
 ## 14. Demo
 
-A reproducible 1.7-minute, multi-voice demo meeting can be generated on
-Windows with the built-in speech voices:
+A reproducible 3-minute, three-person demo meeting (fictional speakers Rahul,
+Priya and Arjun) can be generated on Windows with the built-in speech voices
+and FFmpeg:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\make_demo_recording.ps1
@@ -230,11 +260,16 @@ powershell -ExecutionPolicy Bypass -File scripts\make_demo_recording.ps1
 
 It writes `data/demo/demo_meeting.wav` (gitignored). The meeting contains:
 
-- a confirmed decision and a negative decision ("decided not to change the database schema");
-- two proposals and a question that is not a decision;
-- an action item with owner and deadline ("Rahul, can you update the API documentation by Friday?");
-- an action item with neither ("I'll send the cost report");
-- statements that are not tasks, plus numbers, a date, money, a percentage and technical terms.
+- two confirmed decisions: migrate the Kubernetes cluster to version 1.29, and
+  "we will not change the database schema during this sprint";
+- proposals left open (a 2 AM backup, moving reporting to PostgreSQL) and a
+  question that is not a decision ("Has everyone agreed to the new deployment schedule?");
+- an action item with owner and deadline ("Rahul, please update the deployment
+  documentation by Friday, October 10") and one with neither ("We'll send the
+  updated cost report to the finance team");
+- statements that are not tasks ("Someone should probably review the monitoring alerts");
+- technical terms (Kubernetes, PostgreSQL, API, CI/CD), a version, a date, a
+  budget of forty-two thousand dollars, and negations.
 
 Any other English meeting recording can be used instead.
 
@@ -250,10 +285,10 @@ evidence and the models used). The recording is synthetic speech, so it is
 safe to share. Re-running it through the app may give slightly different
 wording, since the LLM stages are not fully deterministic.
 
-Suggested demo flow: upload the file → show the six stages completing →
-compare raw vs refined ("Cuba Ernets" → "Kubernetes") → decisions vs
-proposals → action items with "Not specified" → downloads → open
-`meeting_record.json`.
+Suggested demo flow: upload the file → show the six stages completing with
+the live timer → compare raw vs refined ("Cuba Ernets" → "Kubernetes") →
+decisions vs proposals → action items with "Not specified" → Downloads → open
+the action items PDF and `meeting_record.json`.
 
 ## 15. Known limitations
 
@@ -278,7 +313,7 @@ backend/app/main.py           FastAPI endpoints
 backend/app/config.py         settings (.env)
 backend/app/schemas.py        Pydantic contracts between stages
 backend/app/jobs.py           in-memory job store
-backend/app/pipeline/         audio, stt, refine, document, guards, gemini, export, runner
+backend/app/pipeline/         audio, stt, refine, document, guards, gemini, export, documents (PDF/Word), runner
 backend/tests/                pytest suite
 frontend/app.py               Streamlit UI
 prompts/                      versioned LLM prompts

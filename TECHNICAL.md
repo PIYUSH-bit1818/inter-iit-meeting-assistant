@@ -1,6 +1,6 @@
 # Technical Description
 
-The Meeting Assistant turns a recorded English meeting into a raw transcript,
+Scripted, the AI meeting assistant, turns a recorded English meeting into a raw transcript,
 a separately refined transcript and an evidence-backed meeting record through
 one speech-to-text model and **two distinct LLM stages**, coordinated by a
 FastAPI backend and presented in a Streamlit UI.
@@ -334,28 +334,57 @@ after a later stage fails).
 | `action_items` / `action_items_json` | `action_items.csv` / `action_items.json` | "Not specified" in CSV, `null` in JSON |
 | `meeting_record_md` | `meeting_record.md` | complete human-readable record incl. withheld items |
 | `meeting_record_json` | `meeting_record.json` | `{models, raw_transcript, refined_transcript, meeting_record}` — the Pydantic models' own JSON, so it can be loaded back with `model_validate` |
+| `<deliverable>_pdf` / `<deliverable>_docx` | e.g. `key_decisions.pdf`, `action_items.docx` | PDF and Word versions of the six deliverables (below) |
+
+**PDF and Word deliverables** ([documents.py](backend/app/pipeline/documents.py)).
+Each deliverable — raw transcript, refined transcript, meeting minutes, key
+decisions, action items, complete meeting record — is first built as a list of
+neutral blocks (title, metadata, headings, paragraphs, evidence quotes, tables,
+timestamped transcript lines) from the same objects. The same blocks are then
+rendered to PDF with fpdf2 and to Word with python-docx, so the two formats
+carry identical content. The refined-transcript document lists every
+correction (raw → refined) and every correction the guards rejected; the key
+decisions document lists proposals separately as "not agreed"; the action
+items table shows "Not specified" for missing owners and deadlines; empty
+lists are stated explicitly ("No decisions were reached in this meeting.").
+PDFs embed a subset of a Unicode system font (configurable via
+`PDF_FONT_REGULAR` / `PDF_FONT_BOLD`), with an ASCII fallback for a few symbols
+if none is installed. Rendering all 21 export files takes about 2.5 s, so the
+API caches the files of finished jobs.
 
 ## User interface ([frontend/app.py](frontend/app.py))
 
-Upload → **Process recording** → live status of the six stages (polled from
-the backend, so a stage is shown as done only when it is) → tabs: Raw
-transcript, Refined transcript, Raw vs refined (per-segment comparison with
-edits and rejected edits), Summary, Minutes, Decisions, Proposals / not agreed,
-Action items (table; "Not specified" for nulls), Withheld / rejected (type,
-attempted content, reasons, cited evidence), Downloads. Failures show the
-backend's message plus a hint keyed on `error_code`; no stack traces or keys
-are ever displayed.
+Branded **Scripted** (logo: a person in a chair with headphones at a podcast
+microphone, also used as the browser-tab icon), dark navy theme. Upload card →
+**Process Meeting** → processing panel with a live elapsed-time clock, a
+rough time-left estimate (per-stage cost model fitted to real runs:
+transcription ≈ 5 s + 0.24 s per audio second, mostly upload; refinement
+≈ 20 s + 0.03 s per word; documentation ≈ 12 s + 0.006 s per word; the
+recording length comes from the validation stage message and the word count
+from the raw transcript once it exists), a
+loading spinner, a progress bar (stages completed out of six), the stage
+currently running and for how long, and six stage cards with real status and
+per-stage duration (all derived from the backend's stage timestamps, polled
+every second, so a stage is shown as done only when it is) → result metrics →
+sections: Overview (summary, minutes, statistics incl. processing time),
+Transcript (raw, refined, raw-vs-refined comparison with edits and rejected
+edits), Decisions & Actions (decisions, action items with "Not specified" for
+nulls, proposals / not agreed, safety checks with withheld items and reasons),
+Downloads (each deliverable as PDF or Word, plus JSON/CSV/TXT/Markdown).
+Failures show the backend's message plus a hint keyed on `error_code`; no
+stack traces, keys or configuration are ever displayed.
 
 ## Testing strategy
 
-- **334 automated tests** (`cd backend && pytest`), offline: Groq and Gemini
+- **348 automated tests** (`cd backend && pytest`), offline: Groq and Gemini
   clients are replaced with fakes; audio tests synthesise real files with ffmpeg.
   Coverage: audio validation/normalisation, STT parsing and chunking
   (timestamps, de-duplication, byte limits), refinement and its guards,
   documentation and its grounding checks (all decision/proposal/action-item
   rules), Gemini error mapping and fallbacks, the runner (stage order,
   failures, cleanup), the API (upload limits, status, exports) and exports
-  (Markdown/CSV/JSON consistency, round-trip through the Pydantic models).
+  (Markdown/CSV/JSON consistency, round-trip through the Pydantic models,
+  and PDF/Word text read back and checked against the record).
 - **Real smoke tests** against Groq and both Gemini models on controlled
   transcripts during development.
 - **Browser end-to-end test** (Playwright driving Microsoft Edge) on a
