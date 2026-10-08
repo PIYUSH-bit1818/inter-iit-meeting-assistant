@@ -5,6 +5,12 @@ transcript and a trustworthy written record: a raw transcript, a separately
 refined transcript, and a meeting summary, minutes, decisions, proposals and
 action items — every item backed by a quote from the recording.
 
+**Submission materials:** demo video of an end-to-end run
+([docs/scripted_demo.mp4](docs/scripted_demo.mp4), 1:39) · technical report
+([docs/Scripted_Technical_Report.pdf](docs/Scripted_Technical_Report.pdf), 3 pages; source
+[docs/technical_report.html](docs/technical_report.html)) · demo recording and its outputs
+([samples/demo_meeting/](samples/demo_meeting/)).
+
 ## 1. The problem
 
 Meeting notes are only useful if they are right. Speech recognition garbles
